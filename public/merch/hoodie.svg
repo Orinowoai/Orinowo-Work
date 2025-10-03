@@ -1,0 +1,15 @@
+<svg width="800" height="800" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="hoodieGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#374151;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1f2937;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="800" height="800" fill="url(#hoodieGrad)"/>
+  <path d="M250 200 Q400 150 550 200 L550 500 Q550 520 530 520 L270 520 Q250 520 250 500 Z" fill="#d4af37" opacity="0.2"/>
+  <circle cx="320" cy="280" r="20" fill="#d4af37" opacity="0.3"/>
+  <circle cx="480" cy="280" r="20" fill="#d4af37" opacity="0.3"/>
+  <rect x="300" y="320" width="200" height="80" fill="#d4af37" opacity="0.1" rx="8"/>
+  <text x="400" y="600" font-family="Arial, sans-serif" font-size="48" font-weight="bold" text-anchor="middle" fill="#d4af37">HOODIE</text>
+  <text x="400" y="650" font-family="Arial, sans-serif" font-size="24" text-anchor="middle" fill="#d4af37" opacity="0.8">Premium Quality</text>
+</svg>

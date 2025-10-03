@@ -1,0 +1,16 @@
+<svg width="1200" height="675" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="blogGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e293b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#334155;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="675" fill="url(#blogGrad)"/>
+  <rect x="100" y="150" width="1000" height="200" fill="#d4af37" opacity="0.1" rx="12"/>
+  <circle cx="300" cy="250" r="40" fill="#d4af37" opacity="0.2"/>
+  <rect x="370" y="220" width="400" height="20" fill="#d4af37" opacity="0.3" rx="10"/>
+  <rect x="370" y="260" width="300" height="15" fill="#d4af37" opacity="0.2" rx="7"/>
+  <rect x="370" y="285" width="350" height="15" fill="#d4af37" opacity="0.2" rx="7"/>
+  <text x="600" y="450" font-family="Arial, sans-serif" font-size="64" font-weight="bold" text-anchor="middle" fill="#d4af37">BLOG POST</text>
+  <text x="600" y="510" font-family="Arial, sans-serif" font-size="32" text-anchor="middle" fill="#d4af37" opacity="0.8">Placeholder Image</text>
+</svg>

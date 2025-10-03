@@ -1,0 +1,19 @@
+<svg width="800" height="800" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="posterGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#7c3aed;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#5b21b6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="800" height="800" fill="url(#posterGrad)"/>
+  <rect x="150" y="100" width="500" height="600" fill="#ffffff" opacity="0.95" rx="8"/>
+  <rect x="180" y="130" width="440" height="200" fill="#1f2937" opacity="0.1" rx="4"/>
+  <circle cx="300" cy="230" r="50" fill="#d4af37" opacity="0.3"/>
+  <rect x="370" y="200" width="200" height="20" fill="#d4af37" opacity="0.4" rx="10"/>
+  <rect x="370" y="240" width="150" height="15" fill="#1f2937" opacity="0.3" rx="7"/>
+  <rect x="370" y="265" width="180" height="15" fill="#1f2937" opacity="0.3" rx="7"/>
+  <rect x="180" y="380" width="440" height="280" fill="#d4af37" opacity="0.1" rx="4"/>
+  <text x="400" y="520" font-family="Arial, sans-serif" font-size="72" font-weight="bold" text-anchor="middle" fill="#d4af37">ORINOWO</text>
+  <text x="400" y="570" font-family="Arial, sans-serif" font-size="24" text-anchor="middle" fill="#1f2937" opacity="0.7">Premium Music Platform</text>
+  <text x="400" y="750" font-family="Arial, sans-serif" font-size="48" font-weight="bold" text-anchor="middle" fill="#ffffff">POSTER</text>
+</svg>
