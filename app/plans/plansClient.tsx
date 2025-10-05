@@ -106,20 +106,19 @@ export default function Client({ plans, currency, canceled = false }: { plans: P
                     </li>
                   ))}
                 </ul>
-                {plan.name === 'Free' ? (
+                {plan.price === 0 ? (
                   <a href="/generate" className={`w-full block text-center py-3 rounded-lg font-semibold transition-all duration-200 ${plan.popular ? 'btn-primary' : 'btn-secondary'}`}>{plan.buttonText}</a>
                 ) : (
                   <button
                     disabled={loading}
                     onClick={() => {
                       const priceId =
-                        plan.name === 'Starter'
+                        plan.name === 'Rising Star'
                           ? STRIPE_PRICE_IDS.starter
-                          : plan.name === 'Pro'
+                          : plan.name === 'Master'
                           ? STRIPE_PRICE_IDS.pro
                           : STRIPE_PRICE_IDS.elite
-                      const tierLabel =
-                        plan.name === 'Starter' ? 'Rising Star' : plan.name === 'Pro' ? 'Master' : 'Global Pioneer'
+                      const tierLabel = plan.name
                       handleUpgrade(tierLabel, priceId)
                     }}
                     className={`w-full block text-center py-3 rounded-lg font-semibold transition-all duration-200 ${plan.popular ? 'btn-primary' : 'btn-secondary'}`}
