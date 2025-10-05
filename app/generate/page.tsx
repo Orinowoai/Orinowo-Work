@@ -14,6 +14,7 @@ export default function GeneratePage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedTrack, setGeneratedTrack] = useState<string | null>(null)
   const [trackId, setTrackId] = useState<string | null>(null)
+  const [requestId, setRequestId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [distType, setDistType] = useState<null | 'spotify' | 'apple' | 'video'>(null)
   const { ComingSoonButton, ComingSoonModal } = useComingSoon()
@@ -38,28 +39,67 @@ export default function GeneratePage() {
       })
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}))
+        if (err?.error?.includes('Cooldown active')) {
+          setError('Please wait a moment before generating again.')
+          console.warn('Cooldown active')
+          return
+        }
         throw new Error(err?.error || 'Generation failed')
       }
       const data = await resp.json()
-  // Expect either { audio_url, track_id } or { result: string }
+      // Background path
+      if (data?.status === 'processing' && data?.request_id) {
+        setRequestId(data.request_id)
+        console.log('Background started')
+        // Poll every 3s
+        const poll = async () => {
+          if (!data.request_id) return
+          try {
+            const s = await fetch(`/api/musicgen-status?id=${encodeURIComponent(data.request_id)}`)
+            const json = await s.json()
+            if (json?.status === 'done' && json?.audio_url) {
+              console.log('Response received', json.audio_url)
+              await new Promise(r => setTimeout(r, 2000))
+              console.log('Playback ready')
+              try {
+                const head = await fetch(json.audio_url, { method: 'HEAD' })
+                if (!head.ok) throw new Error('Prefetch failed')
+              } catch {
+                await new Promise(r => setTimeout(r, 1000))
+                await fetch(json.audio_url, { method: 'HEAD' })
+              }
+              setGeneratedTrack(json.audio_url)
+              if (json.track_id) setTrackId(json.track_id)
+              setRequestId(null)
+              return
+            } else if (json?.status === 'error') {
+              setError('Generation failed. Please try again.')
+              setRequestId(null)
+              return
+            }
+          } catch (e) {
+            // keep polling quietly
+          }
+          setTimeout(poll, 3000)
+        }
+        setTimeout(poll, 3000)
+        return
+      }
+      // Immediate path (cache hit)
       const url = data.audio_url || data.result || null
       console.log('Response received', url)
-  if (!url) throw new Error('No audio URL received')
-  // Allow time for storage propagation before playback
-  await new Promise(r => setTimeout(r, 2000))
+      if (!url) throw new Error('No audio URL received')
+      await new Promise(r => setTimeout(r, 2000))
       console.log('Playback ready')
-      // Try to preflight fetch once to ensure URL is reachable
       try {
         const head = await fetch(url, { method: 'HEAD' })
         if (!head.ok) throw new Error('Prefetch failed')
       } catch {
-        // One retry after small delay
         await new Promise(r => setTimeout(r, 1000))
-        const head2 = await fetch(url, { method: 'HEAD' })
-        // proceed regardless to allow browser retry
+        await fetch(url, { method: 'HEAD' })
       }
       setGeneratedTrack(url)
-  if (data.track_id) setTrackId(data.track_id)
+      if (data.track_id) setTrackId(data.track_id)
 
       // Award upload credits (no UI dependency). User id is read from cookie/middleware.
       try {
@@ -142,8 +182,11 @@ export default function GeneratePage() {
           )}
 
           {/* Generate Button */}
-          {isGenerating && (
+          {isGenerating && !requestId && (
             <div className="mb-4 text-white/70 text-center">Generating music…</div>
+          )}
+          {requestId && (
+            <div className="mb-4 text-white/70 text-center">Processing… We'll notify you when it’s ready.</div>
           )}
           <ButtonLoading
             loading={isGenerating}

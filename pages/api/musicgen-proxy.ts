@@ -47,7 +47,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ? await upstream.json()
       : await upstream.text()
 
-    // Normalize to { audio_url } shape
+    // If backend is now backgrounding, return as-is (status: processing)
+    if (typeof data === 'object' && data && data.status === 'processing' && data.request_id) {
+      return res.status(200).json(data)
+    }
+
+    // Otherwise normalize to { audio_url }
     let audio_url: string | null = null
     let track_id: string | undefined
     if (typeof data === 'string') {
