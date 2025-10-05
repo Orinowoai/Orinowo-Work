@@ -6,7 +6,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT || 3001;
+const port = process.env.PORT || 8080;
+
+app.get("/", (req, res) => {
+  res.send(" Orinowo MusicGen service is live");
+});
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'musicgen', time: new Date().toISOString() });
@@ -47,6 +51,6 @@ app.post('/generate', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Music generation service listening on port ${PORT}`);
+app.listen(port, () => {
+  console.log(` Music generation service listening on port ${port}`);
 });
