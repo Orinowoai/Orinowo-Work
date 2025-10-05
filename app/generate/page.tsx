@@ -42,8 +42,12 @@ export default function GeneratePage() {
   const data = await resp.json()
   // Expect either { audio_url, track_id } or { result: string }
   const url = data.audio_url || data.result || null
-      if (!url) throw new Error('No audio URL received')
-      setGeneratedTrack(url)
+  if (!url) throw new Error('No audio URL received')
+  // Allow time for storage propagation before playback
+  await new Promise(r => setTimeout(r, 2000))
+  // eslint-disable-next-line no-console
+  console.log('Track ready for playback ✅')
+  setGeneratedTrack(url)
   if (data.track_id) setTrackId(data.track_id)
 
       // Award upload credits (no UI dependency). User id is read from cookie/middleware.
