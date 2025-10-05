@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from 'react'
 import Leaderboard from '@/components/Leaderboard'
+import SponsorShowcase from '@/components/SponsorShowcase'
 import { Bar } from 'react-chartjs-2'
 import {
   Chart as ChartJS,
@@ -75,6 +76,10 @@ export default function DashboardPage() {
               <button className="btn-primary" title="Support this artist">Promote Track</button>
               <button className="btn-secondary" title="Withdraw available balance">Withdraw Earnings</button>
               <a href="/sponsorship-form" className="btn-secondary" title="Trending track">Submit for Sponsorship</a>
+            </div>
+
+            <div>
+              <SponsorShowcase />
             </div>
           </div>
         )}

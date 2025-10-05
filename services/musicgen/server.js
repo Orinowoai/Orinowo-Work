@@ -35,6 +35,29 @@ app.post('/generate', async (req, res) => {
       return res.status(400).json({ error: 'Missing required field: prompt' });
     }
 
+    // Check cache (7-day TTL)
+    try {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: cached, error: cacheError } = await supabase
+        .from('generation_cache')
+        .select('audio_url, created_at')
+        .eq('prompt', prompt)
+        .eq('duration', Number(duration) || 0)
+        .gte('created_at', sevenDaysAgo)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cacheError) {
+        console.warn('Cache lookup error:', cacheError.message || cacheError);
+      } else if (cached && cached.audio_url) {
+        console.log('Cache hit');
+        return res.json({ success: true, audio_url: cached.audio_url, cached: true });
+      }
+    } catch (e) {
+      console.warn('Cache check failed:', e?.message || e);
+    }
+
+    console.log('New generation triggered');
     // Placeholder external API call – replace with your provider
     const response = await axios.post(
       AI_MUSIC_ENDPOINT,
@@ -134,7 +157,14 @@ app.post('/generate', async (req, res) => {
       return res.status(500).json({ error: 'Failed to save track metadata', details: insertError.message || String(insertError) });
     }
 
-    return res.json({ success: true, track_id: inserted.id, audio_url: publicUrl });
+    // Save to generation cache
+    try {
+      await supabase.from('generation_cache').insert({ prompt, duration: Number(duration) || 0, audio_url: publicUrl });
+    } catch (e) {
+      console.warn('Cache insert failed:', e?.message || e);
+    }
+
+    return res.json({ success: true, track_id: inserted.id, audio_url: publicUrl, cached: false });
   } catch (err) {
     const message = err?.message || 'Unknown error';
     console.error('Music generation error:', message);

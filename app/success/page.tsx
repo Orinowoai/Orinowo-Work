@@ -13,7 +13,7 @@ export default function SuccessPage() {
 
 function SuccessInner() {
   const searchParams = useSearchParams()
-  const sessionId = searchParams.get('session_id')
+  const sessionId = searchParams ? searchParams.get('session_id') : null
   const [showBanner, setShowBanner] = useState(true)
 
   useEffect(() => {

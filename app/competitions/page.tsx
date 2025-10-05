@@ -2,6 +2,7 @@
 export const dynamic = 'force-static'
 
 import { useEffect, useMemo, useState } from 'react'
+import SponsorShowcase from '@/components/SponsorShowcase'
 import { convertPrice, getCurrencyName } from '@/lib/currency'
 
 type Comp = {
@@ -188,6 +189,9 @@ export default function CompetitionsPage() {
             </div>
           </div>
           )})()}
+        <div className="mt-8">
+          <SponsorShowcase />
+        </div>
       </div>
     </main>
   )
