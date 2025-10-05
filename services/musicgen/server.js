@@ -98,6 +98,25 @@ app.post('/generate', async (req, res) => {
       cooldowns.delete(userIp);
     }, 60_000).unref?.();
 
+    // Log start (pending)
+    const startedAt = Date.now();
+    let logId = null;
+    try {
+      const { data: logRow, error: logErr } = await supabase
+        .from('generation_logs')
+        .insert({
+          user_id: req.headers['x-user-id'] || null,
+          prompt,
+          duration: Number(duration) || null,
+          country: req.headers['x-country'] || null,
+          status: 'pending',
+          is_cache_hit: false
+        })
+        .select('id')
+        .single();
+      if (!logErr) logId = logRow?.id || null;
+    } catch {}
+
     // Check cache (7-day TTL)
     try {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -114,6 +133,14 @@ app.post('/generate', async (req, res) => {
         console.warn('Cache lookup error:', cacheError.message || cacheError);
       } else if (cached && cached.audio_url) {
         console.log('Cache hit');
+        // log success with cache hit
+        const latency = Date.now() - startedAt;
+        if (logId) {
+          await supabase
+            .from('generation_logs')
+            .update({ status: 'success', latency, is_cache_hit: true })
+            .eq('id', logId);
+        }
         return res.json({ success: true, audio_url: cached.audio_url, cached: true });
       }
     } catch (e) {
@@ -191,6 +218,16 @@ app.post('/generate', async (req, res) => {
         }
 
         jobs.set(requestId, { status: 'done', audio_url: publicUrl, track_id: inserted.id });
+        // update log success
+        try {
+          if (logId) {
+            const latency = Date.now() - startedAt;
+            await supabase
+              .from('generation_logs')
+              .update({ status: 'success', latency, is_cache_hit: false })
+              .eq('id', logId);
+          }
+        } catch {}
         console.log('Success');
         // cleanup job after 10 minutes
         setTimeout(() => jobs.delete(requestId), 10 * 60_000).unref?.();
@@ -198,6 +235,15 @@ app.post('/generate', async (req, res) => {
         const message = e?.message || 'Background generation failed';
         jobs.set(requestId, { status: 'error', error: message });
         console.error('Music generation error:', message);
+        try {
+          if (logId) {
+            const latency = Date.now() - startedAt;
+            await supabase
+              .from('generation_logs')
+              .update({ status: 'failed', latency })
+              .eq('id', logId);
+          }
+        } catch {}
         setTimeout(() => jobs.delete(requestId), 10 * 60_000).unref?.();
       }
     })();
