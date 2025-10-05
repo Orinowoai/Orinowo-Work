@@ -30,6 +30,7 @@ export default function GeneratePage() {
     setError(null)
     
     try {
+      console.log('Request sent')
       const resp = await fetch('/api/musicgen-proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -39,15 +40,25 @@ export default function GeneratePage() {
         const err = await resp.json().catch(() => ({}))
         throw new Error(err?.error || 'Generation failed')
       }
-  const data = await resp.json()
+      const data = await resp.json()
   // Expect either { audio_url, track_id } or { result: string }
-  const url = data.audio_url || data.result || null
+      const url = data.audio_url || data.result || null
+      console.log('Response received', url)
   if (!url) throw new Error('No audio URL received')
   // Allow time for storage propagation before playback
   await new Promise(r => setTimeout(r, 2000))
-  // eslint-disable-next-line no-console
-  console.log('Track ready for playback ✅')
-  setGeneratedTrack(url)
+      console.log('Playback ready')
+      // Try to preflight fetch once to ensure URL is reachable
+      try {
+        const head = await fetch(url, { method: 'HEAD' })
+        if (!head.ok) throw new Error('Prefetch failed')
+      } catch {
+        // One retry after small delay
+        await new Promise(r => setTimeout(r, 1000))
+        const head2 = await fetch(url, { method: 'HEAD' })
+        // proceed regardless to allow browser retry
+      }
+      setGeneratedTrack(url)
   if (data.track_id) setTrackId(data.track_id)
 
       // Award upload credits (no UI dependency). User id is read from cookie/middleware.
@@ -131,6 +142,9 @@ export default function GeneratePage() {
           )}
 
           {/* Generate Button */}
+          {isGenerating && (
+            <div className="mb-4 text-white/70 text-center">Generating music…</div>
+          )}
           <ButtonLoading
             loading={isGenerating}
             onClick={handleGenerate}
@@ -158,6 +172,9 @@ export default function GeneratePage() {
               >
                 Your browser does not support the audio element.
               </audio>
+              <div className="mt-2">
+                <a href={generatedTrack} download className="btn-secondary">Download Track</a>
+              </div>
               <div className="flex flex-wrap gap-4">
                 <button className="btn-primary" onClick={() => generatedTrack && window.open(generatedTrack, '_blank')}>Download Track</button>
                 <button className="btn-secondary" onClick={async () => {
