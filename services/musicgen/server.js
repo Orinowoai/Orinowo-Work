@@ -13,6 +13,9 @@ const port = process.env.PORT || 8080;
 console.log("Supabase URL:", process.env.SUPABASE_URL ? "Loaded " : "Missing ");
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
+// Start daily reporting scheduler (non-blocking)
+try { require('../reporting/scheduler.js'); } catch (e) { console.warn('Reporting scheduler not started:', e?.message || e); }
+
 // In-memory cooldowns and background jobs (ephemeral)
 const cooldowns = new Map(); // key: user_ip, value: timestamp (ms)
 const jobs = new Map(); // key: request_id, value: { status, audio_url?, track_id?, error?, model_used?, model_label? }
