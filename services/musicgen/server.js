@@ -10,6 +10,7 @@ app.use(express.json());
 const port = process.env.PORT || 8080;
 
 // Supabase client (requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)
+console.log("Supabase URL:", process.env.SUPABASE_URL ? "Loaded " : "Missing ");
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 app.get("/", (req, res) => {
@@ -73,12 +74,12 @@ app.post('/generate', async (req, res) => {
       : contentType.includes('aac') ? 'aac'
       : 'mp3';
 
-    // Create unique filename under generated-tracks/
-    const rand = Math.random().toString(36).slice(2);
-    const filename = `generated-tracks/${Date.now()}-${rand}.${ext}`;
+  // Create unique filename
+  const rand = Math.random().toString(36).slice(2);
+  const objectPath = `${Date.now()}-${rand}.${ext}`;
 
     // Upload to Supabase Storage
-    const bucket = process.env.SUPABASE_BUCKET || 'generated';
+    const bucketName = process.env.SUPABASE_BUCKET || 'generated-tracks';
     if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
       return res.status(500).json({
         error: 'Supabase not configured: set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY',
@@ -87,8 +88,8 @@ app.post('/generate', async (req, res) => {
 
     const { error: uploadError } = await supabase
       .storage
-      .from(bucket)
-      .upload(filename, Buffer.from(audioResp.data), {
+      .from(bucketName)
+      .upload(objectPath, Buffer.from(audioResp.data), {
         contentType,
         upsert: false,
       });
@@ -99,10 +100,18 @@ app.post('/generate', async (req, res) => {
     }
 
     // Get public URL
-    const { data: pub } = supabase.storage.from(bucket).getPublicUrl(filename);
+    const { data: pub } = supabase.storage.from(bucketName).getPublicUrl(objectPath);
     const publicUrl = pub?.publicUrl;
     if (!publicUrl) {
       return res.status(500).json({ error: 'Failed to obtain public URL for uploaded file' });
+    }
+
+    // Ensure the URL is a public path
+    const base = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
+    const expectedPrefix = `${base}/storage/v1/object/public/`;
+    if (!publicUrl.startsWith(expectedPrefix)) {
+      console.warn('Unexpected public URL format:', publicUrl);
+      // Continue returning the URL, but surface a hint for configuration
     }
 
     return res.json({ audio_url: publicUrl });
