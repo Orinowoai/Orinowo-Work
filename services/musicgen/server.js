@@ -114,7 +114,27 @@ app.post('/generate', async (req, res) => {
       // Continue returning the URL, but surface a hint for configuration
     }
 
-    return res.json({ audio_url: publicUrl });
+    // Insert track record into DB
+    const trackPayload = {
+      user_id: req.headers['x-user-id'] || null,
+      prompt,
+      duration: Number(duration) || null,
+      audio_url: publicUrl,
+      category: 'personal',
+    };
+
+    const { data: inserted, error: insertError } = await supabase
+      .from('tracks')
+      .insert(trackPayload)
+      .select('id')
+      .single();
+
+    if (insertError) {
+      console.error('Supabase insert error:', insertError.message || insertError);
+      return res.status(500).json({ error: 'Failed to save track metadata', details: insertError.message || String(insertError) });
+    }
+
+    return res.json({ success: true, track_id: inserted.id, audio_url: publicUrl });
   } catch (err) {
     const message = err?.message || 'Unknown error';
     console.error('Music generation error:', message);

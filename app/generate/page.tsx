@@ -13,6 +13,7 @@ export default function GeneratePage() {
   const [duration, setDuration] = useState<number>(30)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedTrack, setGeneratedTrack] = useState<string | null>(null)
+  const [trackId, setTrackId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [distType, setDistType] = useState<null | 'spotify' | 'apple' | 'video'>(null)
   const { ComingSoonButton, ComingSoonModal } = useComingSoon()
@@ -38,11 +39,12 @@ export default function GeneratePage() {
         const err = await resp.json().catch(() => ({}))
         throw new Error(err?.error || 'Generation failed')
       }
-      const data = await resp.json()
-      // Expect either { audio_url } or { result: string } that holds an URL
-      const url = data.audio_url || data.result || null
+  const data = await resp.json()
+  // Expect either { audio_url, track_id } or { result: string }
+  const url = data.audio_url || data.result || null
       if (!url) throw new Error('No audio URL received')
       setGeneratedTrack(url)
+  if (data.track_id) setTrackId(data.track_id)
 
       // Award upload credits (no UI dependency). User id is read from cookie/middleware.
       try {
@@ -153,15 +155,32 @@ export default function GeneratePage() {
                 Your browser does not support the audio element.
               </audio>
               <div className="flex flex-wrap gap-4">
-                <button className="btn-primary">
-                  Download Track
-                </button>
-                <button className="btn-secondary">
-                  Save to Library
-                </button>
-                <button className="btn-secondary">
-                  Share Track
-                </button>
+                <button className="btn-primary" onClick={() => generatedTrack && window.open(generatedTrack, '_blank')}>Download Track</button>
+                <button className="btn-secondary" onClick={async () => {
+                  try {
+                    const res = await fetch('/api/save-track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, duration, audio_url: generatedTrack }) })
+                    const json = await res.json()
+                    if (!res.ok) throw new Error(json?.error || 'Save failed')
+                    setTrackId(json.track_id)
+                    alert('Saved to your library')
+                  } catch (e:any) {
+                    console.error('Save track error:', e?.message || e)
+                    alert('Failed to save track')
+                  }
+                }}>Save to Library</button>
+                <button className="btn-secondary" onClick={async () => {
+                  try {
+                    const id = trackId
+                    if (!id) throw new Error('Please save the track first')
+                    const res = await fetch('/api/submit-competition', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ track_id: id, category: 'competition' }) })
+                    const json = await res.json()
+                    if (!res.ok) throw new Error(json?.error || 'Submit failed')
+                    alert('Submitted to competition')
+                  } catch (e:any) {
+                    console.error('Submit competition error:', e?.message || e)
+                    alert(e?.message || 'Failed to submit to competition')
+                  }
+                }}>Submit to Competition</button>
               </div>
             </div>
           </div>
