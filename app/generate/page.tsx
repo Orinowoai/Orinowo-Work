@@ -10,6 +10,7 @@ import { useComingSoon } from '@/components/ui/ComingSoon'
 
 export default function GeneratePage() {
   const [prompt, setPrompt] = useState('')
+  const [duration, setDuration] = useState<number>(30)
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedTrack, setGeneratedTrack] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -28,11 +29,20 @@ export default function GeneratePage() {
     setError(null)
     
     try {
-      // Simulate API call - replace with actual generation logic
-      await new Promise(resolve => setTimeout(resolve, 3000))
-      
-      // Mock generated track URL
-      setGeneratedTrack('/audio/sample-track.mp3')
+      const resp = await fetch('/api/musicgen-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, duration }),
+      })
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}))
+        throw new Error(err?.error || 'Generation failed')
+      }
+      const data = await resp.json()
+      // Expect either { audio_url } or { result: string } that holds an URL
+      const url = data.audio_url || data.result || null
+      if (!url) throw new Error('No audio URL received')
+      setGeneratedTrack(url)
 
       // Award upload credits (no UI dependency). User id is read from cookie/middleware.
       try {
@@ -92,6 +102,21 @@ export default function GeneratePage() {
             </div>
           </div>
 
+          {/* Duration Input */}
+          <div className="mb-6">
+            <label htmlFor="duration" className="block text-sm font-medium text-white mb-2">Duration (seconds)</label>
+            <input
+              id="duration"
+              type="number"
+              min={5}
+              max={300}
+              value={duration}
+              onChange={(e) => setDuration(Math.max(5, Math.min(300, Number(e.target.value) || 0)))}
+              className="w-40 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold"
+              disabled={isGenerating}
+            />
+          </div>
+
           {/* Error Display */}
           {error && (
             <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
@@ -123,6 +148,7 @@ export default function GeneratePage() {
                 controls
                 className="w-full mb-4"
                 src={generatedTrack}
+                autoPlay
               >
                 Your browser does not support the audio element.
               </audio>

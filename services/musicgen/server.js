@@ -43,11 +43,20 @@ app.post('/generate', async (req, res) => {
       }
     );
 
-    return res.status(response.status).json(response.data);
+    const replicateResponse = response?.data || {};
+    const audioUrl = Array.isArray(replicateResponse.output)
+      ? replicateResponse.output[0]
+      : null;
+
+    if (!audioUrl) {
+      throw new Error('No audio URL found in response');
+    }
+
+    return res.json({ audio_url: audioUrl });
   } catch (err) {
-    const status = err?.response?.status || 502;
-    const data = err?.response?.data || { error: 'Upstream request failed' };
-    return res.status(status).json(data);
+    const message = err?.message || 'Unknown error';
+    console.error('Music generation error:', message);
+    return res.status(500).json({ error: 'Failed to generate music', details: message });
   }
 });
 
