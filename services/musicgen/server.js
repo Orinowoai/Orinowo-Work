@@ -2,6 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const { createClient } = require('@supabase/supabase-js');
+let translate;
+try {
+  translate = require('@vitalets/google-translate-api');
+} catch (e) {
+  console.warn('Translation module not available:', e?.message || e);
+}
 
 const app = express();
 app.use(cors());
@@ -154,6 +160,24 @@ app.post('/generate', async (req, res) => {
       cooldowns.delete(userIp);
     }, 60_000).unref?.();
 
+    // Detect and translate prompt if needed
+    const originalPrompt = String(prompt);
+    let englishPrompt = originalPrompt;
+    let detectedLang = 'en';
+    if (translate) {
+      try {
+        const det = await translate(originalPrompt, { to: 'en' });
+        // library auto-detects the source language and returns translated text
+        detectedLang = (det?.from?.language?.iso) || 'auto';
+        englishPrompt = det?.text || originalPrompt;
+        console.log('Detected language:', detectedLang);
+      } catch (e) {
+        console.warn('Translation failed, using original prompt:', e?.message || e);
+        englishPrompt = originalPrompt;
+        detectedLang = 'unknown';
+      }
+    }
+
     // Log start (pending)
     totalRequests++;
     const startedAt = Date.now();
@@ -163,7 +187,9 @@ app.post('/generate', async (req, res) => {
         .from('generation_logs')
         .insert({
           user_id: req.headers['x-user-id'] || null,
-          prompt,
+          prompt: originalPrompt,
+          english_prompt: englishPrompt,
+          language_detected: detectedLang,
           duration: Number(duration) || null,
           country: req.headers['x-country'] || null,
           status: 'pending',
@@ -180,7 +206,7 @@ app.post('/generate', async (req, res) => {
       const { data: cached, error: cacheError } = await supabase
         .from('generation_cache')
         .select('audio_url, created_at')
-        .eq('prompt', prompt)
+        .eq('prompt', originalPrompt)
         .eq('duration', Number(duration) || 0)
         .gte('created_at', sevenDaysAgo)
         .order('created_at', { ascending: false })
@@ -201,7 +227,7 @@ app.post('/generate', async (req, res) => {
         }
         totalCompletions++;
         totalLatencyMs += latency;
-        return res.json({ success: true, audio_url: cached.audio_url, cached: true, model_label: 'Cache' });
+        return res.json({ success: true, audio_url: cached.audio_url, cached: true, model_label: 'Cache', original_prompt: originalPrompt, translated_prompt: englishPrompt, language_detected: detectedLang });
       }
     } catch (e) {
       console.warn('Cache check failed:', e?.message || e);
@@ -217,7 +243,7 @@ app.post('/generate', async (req, res) => {
         // 1) Select model based on cost and fallbacks; use queue to limit concurrency
         const BASE_RATE = 0.002; // £ per second
         const estCost = (Number(duration) || 0) * BASE_RATE;
-        const { audioUrl, modelUsed } = await callProviderWithModel(prompt, duration, { endpoint: AI_MUSIC_ENDPOINT, key: AI_MUSIC_KEY, estimatedCost: estCost });
+  const { audioUrl, modelUsed } = await callProviderWithModel(englishPrompt, duration, { endpoint: AI_MUSIC_ENDPOINT, key: AI_MUSIC_KEY, estimatedCost: estCost });
 
         // 2) Fetch generated audio bytes
         let audioResp;
@@ -260,7 +286,7 @@ app.post('/generate', async (req, res) => {
         // 6) Insert track record
         const trackPayload = {
           user_id: req.headers['x-user-id'] || null,
-          prompt,
+          prompt: originalPrompt,
           duration: Number(duration) || null,
           audio_url: publicUrl,
           category: 'personal',
@@ -274,20 +300,20 @@ app.post('/generate', async (req, res) => {
 
         // 7) Save to generation cache
         try {
-          await supabase.from('generation_cache').insert({ prompt, duration: Number(duration) || 0, audio_url: publicUrl });
+          await supabase.from('generation_cache').insert({ prompt: originalPrompt, duration: Number(duration) || 0, audio_url: publicUrl });
         } catch (e) {
           console.warn('Cache insert failed:', e?.message || e);
         }
 
         const modelLabel = (modelUsed && modelUsed.includes('fast')) ? 'Fast Mode' : (modelUsed && modelUsed.includes('fallback')) ? 'Fallback' : 'High Quality';
-        jobs.set(requestId, { status: 'done', audio_url: publicUrl, track_id: inserted.id, model_used: modelUsed, model_label: modelLabel });
+        jobs.set(requestId, { status: 'done', audio_url: publicUrl, track_id: inserted.id, model_used: modelUsed, model_label: modelLabel, original_prompt: originalPrompt, translated_prompt: englishPrompt, language_detected: detectedLang });
         // update log success
         try {
           if (logId) {
             const latency = Date.now() - startedAt;
             await supabase
               .from('generation_logs')
-              .update({ status: 'success', latency, is_cache_hit: false, model_used: modelUsed, cost_est: estCost })
+              .update({ status: 'success', latency, is_cache_hit: false, model_used: modelUsed, cost_est: estCost, english_prompt: englishPrompt, language_detected: detectedLang })
               .eq('id', logId);
             totalCompletions++;
             totalLatencyMs += latency;
@@ -313,7 +339,7 @@ app.post('/generate', async (req, res) => {
       }
     })();
 
-    return res.json({ status: 'processing', request_id: requestId });
+    return res.json({ status: 'processing', request_id: requestId, original_prompt: originalPrompt, translated_prompt: englishPrompt, language_detected: detectedLang });
   } catch (err) {
     const message = err?.message || 'Unknown error';
     console.error('Music generation error:', message);
