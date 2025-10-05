@@ -119,6 +119,18 @@ export default function ContactPage() {
           </p>
         </div>
 
+        {/* How it works (moved from dedicated page) */}
+        <section className="mb-16 rounded-2xl border border-gold/20 bg-black/40 p-6">
+          <h2 className="text-2xl font-bold text-white mb-4">How it works</h2>
+          <ol className="list-decimal list-inside space-y-2 text-white/80">
+            <li><span className="font-semibold text-white">Create:</span> Use the golden Generate button on the homepage to craft ideas fast.</li>
+            <li><span className="font-semibold text-white">Collaborate:</span> Jam Rooms and Collab tools bring creators together.</li>
+            <li><span className="font-semibold text-white">Release:</span> Premiere on Orinowo Video or distribute to DSPs via third‑party delivery.</li>
+            <li><span className="font-semibold text-white">Compete:</span> Join challenges and competitions to win credits and exposure.</li>
+          </ol>
+          <p className="text-white/60 text-sm mt-3">Questions on any step? Send us a message below and we’ll help.</p>
+        </section>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
           {/* Contact Form */}
           <div className="bg-gray-900/50 rounded-2xl border border-gray-800 p-8">

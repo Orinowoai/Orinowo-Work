@@ -1,0 +1,27 @@
+User-agent: *
+Allow: /
+
+# High-priority pages for crawling
+Allow: /blog
+Allow: /spotlight
+Allow: /plans
+Allow: /generate
+Allow: /contact
+
+# Sitemap location
+Sitemap: https://orinowo.com/sitemap.xml
+
+# Crawl-delay for respectful crawling
+Crawl-delay: 1
+
+# Block admin areas (if any exist in future)
+Disallow: /admin/
+Disallow: /api/internal/
+Disallow: /_next/
+Disallow: /.*
+
+# Allow assets
+Allow: /brand/
+Allow: /spotlight/
+Allow: /blog/
+Allow: /merch/

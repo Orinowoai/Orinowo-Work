@@ -1,0 +1,22 @@
+{
+  "global": {
+    "logo": "public/brand/logo-full.png"
+  },
+  "types": {
+    "tshirt": { "scale": 0.18, "offsetY": -0.12 },
+    "hoodie": { "scale": 0.18, "offsetY": -0.12 },
+    "cap": { "scale": 0.26, "offsetY": -0.18 },
+    "tote": { "scale": 0.30, "offsetY": 0.02 },
+    "mug": { "scale": 0.24 },
+    "phonecase": { "scale": 0.28 },
+    "vinyl": { "scale": 0.40 }
+  },
+  "overrides": [
+    {
+      "pattern": "special-tee.*\\.(png|jpe?g)$",
+      "scale": 0.22,
+      "offsetY": -0.08,
+      "opacity": 0.9
+    }
+  ]
+}

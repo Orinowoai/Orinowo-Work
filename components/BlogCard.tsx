@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 
 interface BlogCardProps {
   slug: string
@@ -29,16 +30,21 @@ export default function BlogCard({
 
   return (
     <Link href={`/blog/${slug}`} className="group block">
-      <article className="card-glass overflow-hidden hover:shadow-glow-lg hover:scale-105 transition-all duration-500 hover:border-gold/60 relative">
+      <article className="card-glass overflow-hidden hover:shadow-glow hover:scale-105 transition-all duration-700 hover:border-gold/60 relative transform hover:-translate-y-2">
         {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 z-10"></div>
         
         {/* Image */}
         <div className="relative aspect-video overflow-hidden">
-          <img
+          <Image
             src={image || '/blog/placeholder.jpg'}
             alt={title}
-            className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+            fill
+            className="object-cover group-hover:scale-110 transition-transform duration-700"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            loading="lazy"
+            placeholder="blur"
+            blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
           />
           
           {/* Reading time badge */}
@@ -75,12 +81,12 @@ export default function BlogCard({
           </div>
 
           {/* Title */}
-          <h2 className="text-white text-xl font-bold mb-4 group-hover:text-gold transition-colors duration-300 line-clamp-2 text-shadow">
+          <h2 className="text-white text-xl font-bold mb-4 group-hover:text-gold transition-colors duration-700 line-clamp-2 text-shadow font-semibold tracking-tight">
             {title}
           </h2>
 
           {/* Excerpt */}
-          <p className="text-slate-400 text-sm line-clamp-3 mb-6 leading-relaxed">
+          <p className="text-slate-300 text-sm line-clamp-3 mb-6 leading-relaxed font-light">
             {excerpt}
           </p>
 

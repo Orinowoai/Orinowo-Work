@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { getServiceSupabase } from '@/lib/supabase'
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,7 +16,8 @@ export async function POST(request: NextRequest) {
     // In production, you'd want to track user sessions or require authentication
     const userIP = request.ip || 'unknown'
     
-    const { data: existingVote, error: checkError } = await supabase
+    const supabase = getServiceSupabase()
+    const { data: existingVote } = await supabase
       .from('votes')
       .select('id')
       .eq('entry_id', entry_id)

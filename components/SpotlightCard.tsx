@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 
 interface SpotlightCardProps {
   id: string
@@ -40,16 +41,18 @@ export default function SpotlightCard({
       href={`/spotlight?tab=${type}s`}
       className="group block"
     >
-      <div className="card-glass overflow-hidden hover:shadow-glow-lg hover:scale-105 transition-all duration-500 hover:border-gold/60 relative">
+      <div className="card-glass overflow-hidden hover:shadow-glow-lg hover:scale-110 transition-all duration-700 hover:border-gold/70 relative transform hover:-translate-y-3 hover:shadow-2xl">
         {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 z-10"></div>
         
         {/* Image */}
         <div className="relative aspect-square overflow-hidden rounded-xl">
-          <img
+          <Image
             src={image || fallbackImages[type]}
             alt={title}
-            className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+            fill
+            className="object-cover group-hover:scale-110 transition-transform duration-700"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
           
           {/* Floating badges */}
@@ -80,14 +83,14 @@ export default function SpotlightCard({
 
         {/* Content */}
         <div className="p-6 relative z-20">
-          <h3 className="text-white font-bold text-xl group-hover:text-gold transition-colors duration-300 line-clamp-2 mb-2 text-shadow">
+          <h3 className="text-white font-bold text-xl group-hover:text-gold transition-colors duration-700 line-clamp-2 mb-3 text-shadow tracking-tight leading-tight">
             {title}
           </h3>
           
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-gold animate-pulse"></div>
-              <span className="text-slate-400 text-sm">
+              <div className="w-2 h-2 rounded-full bg-gold animate-pulse shadow-glow"></div>
+              <span className="text-slate-300 text-sm font-medium">
                 Featured {type.charAt(0).toUpperCase() + type.slice(1)}
               </span>
             </div>

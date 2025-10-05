@@ -24,6 +24,13 @@ const config: Config = {
         'glow': 'glow 2s ease-in-out infinite alternate',
         'float': 'float 3s ease-in-out infinite',
         'gradient': 'gradient 8s linear infinite',
+        'pulse-gentle': 'pulseGentle 2s ease-in-out infinite',
+        'bounce-subtle': 'bounceSubtle 3s ease-in-out infinite',
+        'spin-slow': 'spin 3s linear infinite',
+        'orbit-slow': 'spin 16s linear infinite',
+        'orbit-mid': 'spin 10s linear infinite',
+        'orbit-fast': 'spin 6s linear infinite',
+        'twinkle': 'twinkle 2.4s ease-in-out infinite',
       },
       keyframes: {
         fadeIn: {
@@ -45,6 +52,18 @@ const config: Config = {
         gradient: {
           '0%, 100%': { backgroundPosition: '0% 50%' },
           '50%': { backgroundPosition: '100% 50%' },
+        },
+        pulseGentle: {
+          '0%, 100%': { transform: 'scale(1)' },
+          '50%': { transform: 'scale(1.05)' },
+        },
+        bounceSubtle: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-10px)' },
+        },
+        twinkle: {
+          '0%, 100%': { opacity: '0.6', transform: 'scale(1)' },
+          '50%': { opacity: '1', transform: 'scale(1.2)' },
         },
       },
       backdropBlur: {

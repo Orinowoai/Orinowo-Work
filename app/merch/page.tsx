@@ -1,232 +1,183 @@
 'use client'
 
-import { useState } from 'react'
-import Image from 'next/image'
+import { useEffect, useState } from 'react'
+import { convertPrice, getCurrencyName } from '@/lib/currency'
+import CurrencyClient from '@/components/CurrencyClient'
 
-const products = [
-  {
-    id: 1,
-    name: 'Orinowo Premium Hoodie',
-    category: 'Apparel',
-    price: '$89',
-    image: '/merch/hoodie.jpg',
-    description: 'Premium black hoodie with golden Buddha logo embroidered on chest'
-  },
-  {
-    id: 2,
-    name: 'Orinowo Signature Tee',
-    category: 'Apparel',
-    price: '$49',
-    image: '/merch/tee.jpg',
-    description: 'Comfortable cotton tee with gold Buddha design'
-  },
-  {
-    id: 3,
-    name: 'Orinowo Coffee Mug',
-    category: 'Accessories',
-    price: '$29',
-    image: '/merch/mug.jpg',
-    description: 'Premium ceramic mug with golden Buddha logo'
-  },
-  {
-    id: 4,
-    name: 'Orinowo Snapback Hat',
-    category: 'Accessories',
-    price: '$39',
-    image: '/merch/hat.jpg',
-    description: 'Black snapback with embroidered golden Buddha logo'
-  },
-  {
-    id: 5,
-    name: 'Orinowo Art Poster',
-    category: 'Art',
-    price: '$59',
-    image: '/merch/poster.jpg',
-    description: 'Framed art print featuring Buddha and Orinowo branding'
-  },
-  {
-    id: 6,
-    name: 'Orinowo Tote Bag',
-    category: 'Accessories',
-    price: '$45',
-    image: '/merch/tote.jpg',
-    description: 'Eco-friendly tote bag with golden Buddha print'
-  }
+type Product = { id: number; name: string; category: string; price: string; image: string; description: string; soldOut?: boolean }
+
+const essentials: Product[] = [
+  { id: 1, name: 'Orinowo Premium Hoodie', category: 'Essentials', price: '£89', image: '/merch/hoodie.jpg', description: 'Black hoodie • Golden emblem', soldOut: false },
+  { id: 2, name: 'Orinowo Signature Tee', category: 'Essentials', price: '£49', image: '/merch/tee.jpg', description: 'Cotton tee • Gold crest', soldOut: true },
+  { id: 3, name: 'Orinowo Snapback', category: 'Essentials', price: '£39', image: '/merch/hat.jpg', description: 'Embroidered emblem', soldOut: false },
+  { id: 4, name: 'Orinowo Ceramic Mug', category: 'Essentials', price: '£29', image: '/merch/mug.jpg', description: 'Matte black • Gold mark', soldOut: false },
+  { id: 5, name: 'Orinowo Art Poster', category: 'Essentials', price: '£59', image: '/merch/poster.jpg', description: 'Framed print • Limited run', soldOut: true },
+  { id: 6, name: 'Orinowo Tote', category: 'Essentials', price: '£45', image: '/merch/tote.jpg', description: 'Eco canvas • Gold print', soldOut: false },
 ]
 
+const collabs = [
+  { id: 101, name: 'Limited Edition Drop — Series I', price: '£180', note: 'Coming Soon' },
+  { id: 102, name: 'Studio Essentials Pack', price: '£300', note: 'Coming Soon' },
+  { id: 103, name: 'Creator Capsule Collection', price: '£220', note: 'Coming Soon' },
+]
+
+function Countdown() {
+  const [time, setTime] = useState({ d: 2, h: 12, m: 45, s: 8 })
+  useEffect(() => {
+    const t = setInterval(() => {
+      setTime((prev) => {
+        let { d, h, m, s } = prev
+        s = (s + 59) % 60
+        if (s === 59) { m = (m + 59) % 60; if (m === 59) { h = (h + 23) % 24; if (h === 23) { d = Math.max(0, d - 1) } } }
+        return { d, h, m, s }
+      })
+    }, 1000)
+    return () => clearInterval(t)
+  }, [])
+  return (
+    <div className="flex items-center gap-3 text-white/80">
+      {[{k:'D',v:time.d},{k:'H',v:time.h},{k:'M',v:time.m},{k:'S',v:time.s}].map((x) => (
+        <div key={x.k} className="text-center">
+          <div className="text-2xl font-black text-gold">{x.v.toString().padStart(2,'0')}</div>
+          <div className="text-xs text-white/50">{x.k}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function MerchPage() {
-  const [email, setEmail] = useState('')
-  const [isSubmitted, setIsSubmitted] = useState(false)
+  type LiveProduct = { id: string; name: string; thumbnail: string; price: number | string; currency: string; url: string }
+  const [products, setProducts] = useState<LiveProduct[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const handleWaitlistSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    // Simulate API call
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      setIsSubmitted(true)
-    } catch (error) {
-      console.error('Error joining waitlist:', error)
-    }
-  }
+  // Derive storefront base for fallbacks
+  const STORE_INPUT = process.env.NEXT_PUBLIC_PRINTFUL_STORE || 'orinowo.printful.com'
+  const STORE_BASE = (STORE_INPUT.includes('.') ? `https://${STORE_INPUT}` : `https://${STORE_INPUT}.printful.me`).replace(/\/$/, '')
 
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const res = await fetch('/api/printful/products', { cache: 'no-store' })
+        const json = await res.json()
+        setProducts(json.products || [])
+      } catch (e) {
+        console.error('Failed to load Printful products', e)
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [])
   return (
     <div className="min-h-screen py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="text-center mb-16">
-          <h1 className="text-4xl sm:text-5xl font-bold text-white mb-6">
-            Orinowo Merchandise
-          </h1>
-          <p className="text-xl text-gray-400 max-w-3xl mx-auto">
-            Elevate your studio and style with premium merchandise designed for the modern music creator. Coming soon.
-          </p>
+        {/* Hero */}
+        <div className="rounded-3xl border border-gold/30 bg-white/5 backdrop-blur-xl p-10 md:p-14 mb-12">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div>
+              <h1 className="text-4xl sm:text-5xl font-bold text-white mb-3 text-gradient">Exclusive Drops</h1>
+              <p className="text-white/70 max-w-xl">Luxury-grade essentials and limited collaborations. Curated for creators who lead.</p>
+            </div>
+            <div className="text-right">
+              <div className="text-white/60 text-sm mb-1">Next release in</div>
+              <Countdown />
+            </div>
+          </div>
         </div>
 
-        {/* Products Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
-          {products.map((product) => (
-            <div
-              key={product.id}
-              className="bg-gray-900/50 rounded-xl border border-gray-800 hover:border-gold/40 transition-all duration-300 overflow-hidden group"
-            >
-              {/* Product Image */}
-              <div className="relative aspect-square bg-gray-800">
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-gray-600 text-center">
-                    <svg className="w-16 h-16 mx-auto mb-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                    </svg>
-                    <span className="text-sm">Product Image</span>
+        {/* Live Products from Printful */}
+        <div className="mb-12">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-white">Orinowo Collection</h2>
+          </div>
+          {loading ? (
+            <div className="text-center py-16 text-white/50">Loading collection…</div>
+          ) : (products.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {products.map(p => (
+                <div key={p.id} className="group rounded-2xl overflow-hidden border border-gold/20 bg-black/40 backdrop-blur-xl hover:border-gold/40 transition-all">
+                  <div className="relative aspect-square bg-white/5">
+                    <img src={p.thumbnail} alt={p.name} className="w-full h-full object-cover" />
+                  </div>
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-white font-semibold">{p.name}</div>
+                      <div className="text-gold font-bold">{typeof p.price === 'number' ? <CurrencyClient amount={p.price} /> : `$${Number(p.price || 0).toFixed(2)}`}</div>
+                    </div>
+                    <div className="text-white/40 text-xs mb-4">Prices shown in {getCurrencyName()}. Checkout via Printful.</div>
+                    {p.url ? (
+                      <a href={p.url} target="_blank" rel="noopener noreferrer" className="w-full inline-flex justify-center rounded-xl py-3 font-semibold bg-gradient-to-br from-gold to-gold-dark text-black hover:scale-[1.02]">Shop Now</a>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <a href={STORE_BASE} target="_blank" rel="noopener noreferrer" className="w-full inline-flex justify-center rounded-xl py-3 font-semibold bg-gradient-to-br from-gold to-gold-dark text-black hover:scale-[1.02]">See Storefront</a>
+                        <button onClick={() => alert('Product link unavailable right now. Please try the Storefront link above.')} className="w-full inline-flex justify-center rounded-xl py-3 font-semibold border border-gold/40 text-gold">Contact for Purchase</button>
+                      </div>
+                    )}
                   </div>
                 </div>
-                
-                {/* Coming Soon Badge */}
-                <div className="absolute top-4 right-4 bg-gold text-black px-3 py-1 rounded-full text-sm font-bold">
-                  Coming Soon
-                </div>
-              </div>
-
-              {/* Product Info */}
-              <div className="p-6">
-                <div className="mb-2">
-                  <span className="text-xs text-gold uppercase tracking-wide font-semibold">
-                    {product.category}
-                  </span>
-                </div>
-                <h3 className="text-xl font-bold text-white mb-2">
-                  {product.name}
-                </h3>
-                <p className="text-gray-400 text-sm mb-4">
-                  {product.description}
-                </p>
-                <div className="flex items-center justify-between">
-                  <span className="text-2xl font-bold text-gold">
-                    {product.price}
-                  </span>
-                  <button
-                    disabled
-                    className="bg-gray-700 text-gray-400 px-4 py-2 rounded-lg font-semibold cursor-not-allowed"
-                  >
-                    Notify Me
-                  </button>
-                </div>
-              </div>
+              ))}
             </div>
+          ) : (
+            <div className="text-center py-16 text-white/60">Collection launching soon.</div>
           ))}
         </div>
 
-        {/* Waitlist Section */}
-        <div className="bg-gradient-to-r from-gold/10 to-gold-dark/10 rounded-2xl border border-gold/20 p-8 md:p-12 text-center">
-          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6">
-            Be the First to Know
-          </h2>
-          <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-            Join our exclusive waitlist to get early access to limited-edition merchandise and special member pricing.
-          </p>
-
-          {!isSubmitted ? (
-            <form onSubmit={handleWaitlistSubmit} className="max-w-md mx-auto">
-              <div className="flex gap-4 mb-4">
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email address"
-                  className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold"
-                  required
-                />
-                <button
-                  type="submit"
-                  className="btn-primary whitespace-nowrap"
-                >
-                  Join Waitlist
-                </button>
+        {/* Essentials (legacy showcase) */}
+        <div className="mb-12">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-white">Orinowo Essentials</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {essentials.map(p => (
+              <div key={p.id} className="group rounded-2xl overflow-hidden border border-gold/20 bg-black/40 backdrop-blur-xl hover:border-gold/40 transition-all">
+                <div className="relative aspect-video bg-white/5">
+                  {/* PLACEHOLDER image area */}
+                  <div className="absolute inset-0 flex items-center justify-center text-white/30">{p.name}</div>
+                  {p.soldOut && <div className="absolute top-4 left-4 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-white/80 text-xs tracking-wide">Sold Out</div>}
+                </div>
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="text-white font-semibold">{p.name}</div>
+                    <div className="text-gold font-bold"><CurrencyClient amount={parseFloat(p.price.replace('£',''))} /></div>
+                  </div>
+                  <div className="text-white/60 text-sm mb-2">{p.description}</div>
+                  <div className="text-white/40 text-xs mb-4">Prices shown in {getCurrencyName()}. Billed in USD.</div>
+                  <button className={`w-full rounded-xl py-3 font-semibold transition-all ${p.soldOut ? 'bg-white/10 text-white/40 cursor-not-allowed' : 'bg-gradient-to-br from-gold to-gold-dark text-black hover:scale-[1.02]'}`}>{p.soldOut ? 'Unavailable' : 'Add to Collection'}</button>
+                </div>
               </div>
-              <p className="text-sm text-gray-400">
-                We'll notify you when merchandise becomes available. No spam, ever.
-              </p>
-            </form>
-          ) : (
-            <div className="max-w-md mx-auto">
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-6 mb-4">
-                <svg className="w-12 h-12 text-green-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <h3 className="text-xl font-bold text-white mb-2">You're In!</h3>
-                <p className="text-gray-300">
-                  Thanks for joining our waitlist. We'll send you an email as soon as merchandise becomes available.
-                </p>
-              </div>
-            </div>
-          )}
+            ))}
+          </div>
         </div>
 
-        {/* Features Section */}
-        <div className="mt-20">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-white mb-4">
-              Why Choose Orinowo Merchandise?
-            </h2>
+        {/* Collaborations */}
+        <div className="mb-16">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-white">Limited Collaborations</h2>
+            <span className="text-white/70 text-sm">Invitation-only</span>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gold/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {collabs.map(c => (
+              <div key={c.id} className="rounded-2xl border border-gold/30 bg-black/40 backdrop-blur-xl p-6">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-white font-semibold">{c.name}</div>
+                  <div className="text-gold font-bold"><CurrencyClient amount={parseFloat(c.price.replace('£',''))} /></div>
+                </div>
+                <div className="text-white/60 text-sm mb-2">{c.note}</div>
+                <div className="text-white/40 text-xs mb-4">Prices shown in {getCurrencyName()}. Billed in USD.</div>
+                <div className="flex gap-3">
+                  <button className="rounded-xl border border-gold/30 text-gold px-4 py-2">Join Waitlist</button>
+                  <button className="rounded-xl bg-white/10 text-white/60 px-4 py-2 cursor-not-allowed">Preview</button>
+                </div>
               </div>
-              <h3 className="text-xl font-bold text-white mb-2">Premium Quality</h3>
-              <p className="text-gray-400">
-                Every product is carefully crafted with attention to detail and premium materials.
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gold/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-white mb-2">Limited Edition</h3>
-              <p className="text-gray-400">
-                Exclusive designs and limited quantities make each piece special and collectible.
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-16 h-16 bg-gold/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-white mb-2">Creator-Inspired</h3>
-              <p className="text-gray-400">
-                Designed by and for music creators who understand the needs of modern producers.
-              </p>
-            </div>
+            ))}
           </div>
+        </div>
+
+        {/* Checkout CTA */}
+        <div className="text-center">
+          <button className="inline-flex items-center gap-2 rounded-2xl px-8 py-4 border border-gold/40 text-gold hover:bg-gold/10 transition-colors">
+            Complete Your Legacy
+          </button>
         </div>
       </div>
     </div>

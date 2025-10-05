@@ -1,9 +1,78 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
 
 body {
   color: #ffffff;
   background: #0a0e1a;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Performance optimizations */
+.will-change-transform {
+  will-change: transform;
+}
+
+.will-change-opacity {
+  will-change: opacity;
+}
+
+/* Premium animations with hardware acceleration */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 20px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease-out forwards;
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-gradient-to-r from-gold to-gold-dark text-black px-6 py-3 rounded-xl font-semibold hover:from-gold-light hover:to-gold transition-all duration-300 shadow-lg hover:shadow-glow transform hover:scale-105 tracking-wide;
+  }
+
+  .btn-secondary {
+    @apply bg-slate-900/80 backdrop-blur-sm text-white px-6 py-3 rounded-xl font-semibold hover:bg-slate-800/90 border border-slate-700/50 hover:border-gold/60 transition-all duration-300 hover:shadow-lg transform hover:scale-105 tracking-wide;
+  }
+
+  .card-glass {
+    @apply bg-slate-900/40 backdrop-blur-xl rounded-2xl border border-slate-800/50 hover:border-gold/40 transition-all duration-500;
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-r from-gold via-gold-light to-gold bg-clip-text text-transparent;
+  }
+
+  .hover-glow:hover {
+    box-shadow: 0 0 30px rgba(212, 175, 55, 0.6);
+  }
+
+  .shadow-glow {
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.4);
+  }
+
+  .text-shadow {
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+  }
 }

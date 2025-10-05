@@ -17,7 +17,7 @@ export default function Footer() {
                 Orinowo
               </span>
             </Link>
-            <p className="text-gray-400 text-sm max-w-md">
+            <p className="text-slate-300 text-sm max-w-md leading-relaxed font-light">
               Create luxury-grade tracks in seconds with AI-powered music generation. 
               Join the premium music creation revolution.
             </p>
@@ -29,13 +29,19 @@ export default function Footer() {
             <div className="space-y-2">
               <Link
                 href="/privacy"
-                className="block text-gray-400 hover:text-gold transition-colors text-sm"
+                className="block text-slate-400 hover:text-gold transition-colors duration-300 text-sm font-medium"
               >
                 Privacy Policy
               </Link>
               <Link
                 href="/terms"
-                className="block text-gray-400 hover:text-gold transition-colors text-sm"
+                className="block text-slate-400 hover:text-gold transition-colors duration-300 text-sm font-medium"
+              >
+                Terms of Service
+              </Link>
+              <Link
+                href="/terms"
+                className="block text-slate-400 hover:text-gold transition-colors duration-300 text-sm font-medium"
               >
                 Terms of Service
               </Link>
@@ -48,27 +54,35 @@ export default function Footer() {
             <div className="space-y-2">
               <Link
                 href="/contact"
-                className="block text-gray-400 hover:text-gold transition-colors text-sm"
+                className="block text-slate-400 hover:text-gold transition-colors duration-300 text-sm font-medium"
               >
                 Contact Us
               </Link>
               <Link
                 href="/press"
-                className="block text-gray-400 hover:text-gold transition-colors text-sm"
+                className="block text-slate-400 hover:text-gold transition-colors duration-300 text-sm font-medium"
               >
                 Press Kit
               </Link>
             </div>
           </div>
+
+          {/* Language Selector (placeholder) */}
+          <div>
+            <h3 className="text-white font-semibold mb-4">Language</h3>
+            <div className="space-y-2">
+              <button className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:text-gold hover:border-gold/40 transition-all">English ▼</button>
+            </div>
+          </div>
         </div>
 
-        <div className="border-t border-gold/20 mt-8 pt-8">
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <p className="text-gray-400 text-sm">
+        <div className="border-t border-gold/20 mt-10 pt-8">
+          <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+            <p className="text-slate-400 text-sm font-medium">
               © {currentYear} Orinowo. All rights reserved.
             </p>
-            <div className="mt-4 md:mt-0">
-              <p className="text-gray-400 text-sm">
+            <div>
+              <p className="text-slate-400 text-sm font-light tracking-wide">
                 Crafted with precision for premium music creation
               </p>
             </div>

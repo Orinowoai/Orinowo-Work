@@ -1,7 +1,10 @@
 import Link from 'next/link'
+import { convertPrice } from '@/lib/currency'
+import { Suspense } from 'react'
+import dynamic from 'next/dynamic'
+const GenerateButton = dynamic(() => import('@/components/GenerateButton'), { ssr: false })
 import SpotlightCard from '@/components/SpotlightCard'
-import BlogCard from '@/components/BlogCard'
-import { supabase } from '@/lib/supabase'
+import CurrencyClient from '@/components/CurrencyClient'
 
 async function getSpotlightItems() {
   try {
@@ -22,53 +25,10 @@ async function getSpotlightItems() {
   }
 }
 
-async function getBlogPosts() {
-  try {
-    const { data, error } = await supabase
-      .from('blog_posts')
-      .select('slug, title, excerpt, image_url, published_at, author')
-      .eq('published', true)
-      .order('published_at', { ascending: false })
-      .limit(3)
-
-    if (error) throw error
-    return data || []
-  } catch (error) {
-    // Fallback data
-    return [
-      {
-        slug: 'ai-music-revolution',
-        title: 'The AI Music Revolution: How Technology is Reshaping Sound',
-        excerpt: 'Explore how artificial intelligence is transforming the music industry and creating new possibilities for artists and creators.',
-        image_url: '/blog/placeholder.jpg',
-        published_at: '2024-01-15T10:00:00Z',
-        author: 'Sarah Mitchell'
-      },
-      {
-        slug: 'premium-production-techniques',
-        title: 'Premium Production Techniques Every Producer Should Know',
-        excerpt: 'Discover the professional techniques that separate amateur productions from luxury-grade tracks.',
-        image_url: '/blog/placeholder.jpg',
-        published_at: '2024-01-12T14:30:00Z',
-        author: 'David Park'
-      },
-      {
-        slug: 'future-of-music-creation',
-        title: 'The Future of Music Creation: Trends to Watch in 2024',
-        excerpt: 'Get insights into the emerging trends that will shape the future of music production and distribution.',
-        image_url: '/blog/placeholder.jpg',
-        published_at: '2024-01-10T09:15:00Z',
-        author: 'Maria Garcia'
-      }
-    ]
-  }
-}
+// Blog preview removed from homepage
 
 export default async function Home() {
-  const [spotlightData, blogPosts] = await Promise.all([
-    getSpotlightItems(),
-    getBlogPosts()
-  ])
+  const spotlightData = await getSpotlightItems()
 
   return (
     <div className="min-h-screen">
@@ -92,11 +52,15 @@ export default async function Home() {
               <br className="hidden sm:block" />
               {' '}tracks in seconds
             </h1>
-            <p className="text-xl sm:text-2xl text-slate-300 mb-12 max-w-4xl mx-auto animate-slide-up leading-relaxed" style={{animationDelay: '0.2s'}}>
+            <p className="text-xl sm:text-2xl text-slate-300 mb-6 max-w-4xl mx-auto animate-slide-up leading-relaxed" style={{animationDelay: '0.2s'}}>
               Experience the future of music creation with AI-powered generation that delivers 
               <span className="text-gold font-semibold"> premium quality</span> every time.
             </p>
-            <div className="flex flex-col sm:flex-row gap-6 justify-center items-center animate-slide-up" style={{animationDelay: '0.4s'}}>
+            {/* Magnetic Generate Button - center stage */}
+            <div className="animate-fade-in" style={{animationDelay: '0.35s'}}>
+              <GenerateButton intenseParticles />
+            </div>
+            <div className="flex flex-col sm:flex-row gap-6 justify-center items-center animate-slide-up" style={{animationDelay: '0.6s'}}>
               <Link href="/generate" className="btn-primary text-xl hover-glow">
                 <span className="flex items-center gap-3">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -115,8 +79,15 @@ export default async function Home() {
               </Link>
             </div>
             
+            {/* Trust indicator */}
+            <div className="mt-8 animate-fade-in" style={{animationDelay: '0.5s'}}>
+              <p className="text-gold/40 text-sm text-center font-medium tracking-wide">
+                Trusted by 10,000+ creators worldwide
+              </p>
+            </div>
+            
             {/* Stats */}
-            <div className="mt-20 grid grid-cols-3 gap-8 max-w-2xl mx-auto animate-fade-in" style={{animationDelay: '0.6s'}}>
+            <div className="mt-16 grid grid-cols-3 gap-8 max-w-2xl mx-auto animate-fade-in" style={{animationDelay: '0.6s'}}>
               <div className="text-center">
                 <div className="text-3xl font-bold text-gold mb-2">50K+</div>
                 <div className="text-sm text-slate-400 uppercase tracking-wide">Tracks Created</div>
@@ -128,6 +99,24 @@ export default async function Home() {
               <div className="text-center">
                 <div className="text-3xl font-bold text-gold mb-2">99.9%</div>
                 <div className="text-sm text-slate-400 uppercase tracking-wide">Satisfaction</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Global Jam Rooms Entry */}
+      <section className="py-16 relative">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+          <div className="rounded-3xl p-8 md:p-12 border border-gold/20 bg-white/5 backdrop-blur-xl">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-center">
+              <div className="md:col-span-2">
+                <h2 className="text-3xl font-bold text-white mb-2">Global Jam Rooms</h2>
+                <p className="text-white/70 mb-4">Collaborate in real-time with creators across continents</p>
+                <div className="text-gold text-sm">24 active sessions worldwide</div>
+              </div>
+              <div className="text-center md:text-right">
+                <Link href="/jam-rooms" className="btn-primary inline-flex items-center justify-center px-8 py-4">Enter Jam Rooms</Link>
               </div>
             </div>
           </div>
@@ -193,7 +182,7 @@ export default async function Home() {
                   Monthly Music Competition
                 </h3>
                 <p className="text-slate-300 text-lg mb-2">
-                  Compete for a chance to win <span className="text-gold font-bold">$10,000</span> in prizes
+                  Compete for a chance to win <CurrencyClient amount={10000} /> in prizes
                 </p>
                 <p className="text-slate-400 text-sm">
                   Deadline: January 31st • 847 participants
@@ -223,50 +212,7 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* Blog Teaser */}
-      <section className="py-24 relative">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-slate-900/10 to-transparent"></div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-          <div className="text-center mb-16 animate-fade-in">
-            <div className="inline-block px-4 py-2 rounded-full bg-gold/10 border border-gold/20 backdrop-blur-sm mb-6">
-              <span className="text-gold font-semibold text-sm tracking-wide">📚 INDUSTRY INSIGHTS</span>
-            </div>
-            <h2 className="text-4xl sm:text-5xl font-bold text-white mb-6 text-gradient">
-              Latest Insights
-            </h2>
-            <p className="text-slate-300 text-xl max-w-3xl mx-auto leading-relaxed">
-              Stay updated with the latest trends, techniques, and insights from the music industry
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-            {blogPosts.slice(0, 3).map((post: any, index: number) => (
-              <div key={post.slug} className="animate-slide-up" style={{animationDelay: `${index * 0.1}s`}}>
-                <BlogCard
-                  slug={post.slug}
-                  title={post.title}
-                  excerpt={post.excerpt}
-                  image={post.image_url}
-                  publishedAt={post.published_at}
-                  author={post.author}
-                />
-              </div>
-            ))}
-          </div>
-          
-          <div className="text-center animate-fade-in">
-            <Link
-              href="/blog"
-              className="inline-flex items-center gap-3 text-gold hover:text-gold-light transition-all duration-300 font-semibold text-lg group hover-glow px-6 py-3 rounded-2xl bg-gold/5 border border-gold/20 backdrop-blur-sm"
-            >
-              Read All Articles
-              <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-              </svg>
-            </Link>
-          </div>
-        </div>
-      </section>
+      {/* Blog Teaser removed from homepage — visit /blog for articles */}
     </div>
   )
 }

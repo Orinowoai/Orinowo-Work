@@ -1,15 +1,20 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useState } from 'react'
 import Link from 'next/link'
 import SpotlightCard from '@/components/SpotlightCard'
 import CompetitionCard from '@/components/CompetitionCard'
+import { convertPrice } from '@/lib/currency'
+
+// Metadata is exported from layout.tsx for client components
 
 const tabs = [
-  { id: 'artists', label: 'Artists', count: 42 },
-  { id: 'songs', label: 'Songs', count: 128 },
-  { id: 'producers', label: 'Producers', count: 37 },
-  { id: 'competitions', label: 'Competitions', count: 3 },
+  { id: 'songs', label: 'Songs' },
+  { id: 'artists', label: 'Artists' },
+  { id: 'producers', label: 'Producers' },
+  { id: 'competition', label: 'Competition' },
 ]
 
 const mockData = {
@@ -45,9 +50,9 @@ const mockData = {
       endDate: '2024-10-31T23:59:59Z',
       entryCount: 87,
       prizes: [
-        { position: 1, amount: '$5,000', description: 'First Place Winner' },
-        { position: 2, amount: '$3,000', description: 'Runner Up' },
-        { position: 3, amount: '$2,000', description: 'Third Place' }
+        { position: 1, amount: convertPrice(5000), description: 'First Place Winner' },
+        { position: 2, amount: convertPrice(3000), description: 'Runner Up' },
+        { position: 3, amount: convertPrice(2000), description: 'Third Place' }
       ]
     },
     {
@@ -57,9 +62,9 @@ const mockData = {
       endDate: '2024-11-15T23:59:59Z',
       entryCount: 54,
       prizes: [
-        { position: 1, amount: '$7,500', description: 'Grand Prize' },
-        { position: 2, amount: '$4,500', description: 'Second Place' },
-        { position: 3, amount: '$3,000', description: 'Third Place' }
+        { position: 1, amount: convertPrice(7500), description: 'Grand Prize' },
+        { position: 2, amount: convertPrice(4500), description: 'Second Place' },
+        { position: 3, amount: convertPrice(3000), description: 'Third Place' }
       ]
     },
     {
@@ -69,16 +74,16 @@ const mockData = {
       endDate: '2024-12-01T23:59:59Z',
       entryCount: 32,
       prizes: [
-        { position: 1, amount: '$4,000', description: 'Best Producer' },
-        { position: 2, amount: '$2,500', description: 'Rising Star' },
-        { position: 3, amount: '$1,500', description: 'Honorable Mention' }
+        { position: 1, amount: convertPrice(4000), description: 'Best Producer' },
+        { position: 2, amount: convertPrice(2500), description: 'Rising Star' },
+        { position: 3, amount: convertPrice(1500), description: 'Honorable Mention' }
       ]
     }
   ]
 }
 
 export default function SpotlightPage() {
-  const [activeTab, setActiveTab] = useState('artists')
+  const [activeTab, setActiveTab] = useState('songs')
 
   const handleVote = async (entryId: string) => {
     try {
@@ -97,7 +102,7 @@ export default function SpotlightPage() {
   }
 
   const renderTabContent = () => {
-    if (activeTab === 'competitions') {
+    if (activeTab === 'competition') {
       return (
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
           {mockData.competitions.map((competition) => (
@@ -136,7 +141,7 @@ export default function SpotlightPage() {
               votes={item.votes}
               isWinner={item.isWinner}
             />
-            {activeTab !== 'competitions' && (
+            {activeTab !== 'competition' && (
               <button
                 onClick={() => handleVote(item.id)}
                 className="absolute bottom-4 right-4 bg-gold hover:bg-gold-light text-black px-4 py-2 rounded-lg font-semibold transition-colors"
@@ -170,19 +175,13 @@ export default function SpotlightPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 flex items-center space-x-2 ${
+                className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 inline-flex items-center cursor-pointer border ${
                   activeTab === tab.id
-                    ? 'bg-gold text-black'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    ? 'border-gold text-gold bg-gold/10'
+                    : 'border-transparent text-white/60 hover:text-white hover:bg-gray-800'
                 }`}
-                style={{ display: 'inline-flex' }}
               >
                 <span>{tab.label}</span>
-                <span className={`text-xs px-2 py-1 rounded-full ${
-                  activeTab === tab.id ? 'bg-black/20' : 'bg-gray-700'
-                }`}>
-                  {tab.count}
-                </span>
               </button>
             ))}
           </div>

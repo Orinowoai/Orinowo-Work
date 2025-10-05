@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase'
 
 export async function GET() {
   try {
-    // Get current month's spotlight items
+    // Get current month's spotlight items; if table missing or empty, return fallback
     const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM format
 
     const { data, error } = await supabase
@@ -13,13 +13,12 @@ export async function GET() {
         title,
         type,
         image_url,
-        created_at,
-        votes:votes(count)
+        created_at
       `)
       .eq('month', currentMonth)
       .eq('active', true)
 
-    if (error) {
+    if (error || !data || data.length === 0) {
       console.error('Supabase error:', error)
       
       // Return fallback data
@@ -56,21 +55,21 @@ export async function GET() {
         title: item.title,
         type: item.type,
         image: item.image_url,
-        votes: Array.isArray(item.votes) ? item.votes.length : 0
+        votes: 0
       })),
       songs: groupedData.songs.map((item: any) => ({
         id: item.id,
         title: item.title,
         type: item.type,
         image: item.image_url,
-        votes: Array.isArray(item.votes) ? item.votes.length : 0
+        votes: 0
       })),
       producers: groupedData.producers.map((item: any) => ({
         id: item.id,
         title: item.title,
         type: item.type,
         image: item.image_url,
-        votes: Array.isArray(item.votes) ? item.votes.length : 0
+        votes: 0
       }))
     }
 

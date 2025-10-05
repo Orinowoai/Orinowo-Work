@@ -1,0 +1,1 @@
+Place your Orinowo logo here as logo-full.png (transparent PNG preferred). The overlay script will use this file.

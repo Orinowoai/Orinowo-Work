@@ -1,0 +1,26 @@
+{
+  "name": "Orinowo - Premium AI Music Creation Platform",
+  "short_name": "Orinowo",
+  "description": "Where global music begins. Create, collaborate, and innovate with AI-powered tools.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0e1a",
+  "theme_color": "#d4af37",
+  "icons": [
+    {
+      "src": "/brand/logo-icon.png",
+      "sizes": "200x200",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/brand/logo-full.png",
+      "sizes": "500x500",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["music", "productivity", "entertainment"],
+  "lang": "en-US",
+  "orientation": "portrait-primary"
+}

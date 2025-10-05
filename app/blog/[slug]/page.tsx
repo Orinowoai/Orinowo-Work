@@ -1,6 +1,8 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import ReactMarkdown from 'react-markdown'
+import { Metadata } from 'next'
 import { supabase } from '@/lib/supabase'
 
 interface BlogPost {
@@ -13,6 +15,76 @@ interface BlogPost {
   author: string
   read_time: number
   tags: string[]
+}
+
+export async function generateMetadata({ 
+  params 
+}: { 
+  params: { slug: string } 
+}): Promise<Metadata> {
+  const post = await getBlogPost(params.slug)
+
+  if (!post) {
+    return {
+      title: 'Blog Post Not Found - Orinowo',
+      description: 'The requested blog post could not be found on our AI music platform.',
+    }
+  }
+
+  const publishedDate = new Date(post.published_at).toISOString()
+  const tagKeywords = post.tags?.join(', ') || ''
+  
+  return {
+    title: `${post.title} - Orinowo Blog`,
+    description: post.excerpt || `Read ${post.title} on Orinowo's blog - insights about AI music generation, industry trends, and creative technology.`,
+    keywords: [
+      'AI music generation',
+      'music technology blog',
+      'artificial intelligence music',
+      'creative technology insights',
+      'Orinowo blog',
+      'music industry trends',
+      'professional music tools',
+      'enterprise music solutions',
+      'thought leadership',
+      'music innovation',
+      tagKeywords,
+      post.title.toLowerCase().split(' ').slice(0, 3).join(', ')
+    ].filter(Boolean).join(', '),
+    authors: [{ name: post.author }],
+    openGraph: {
+      title: `${post.title} - Orinowo Blog`,
+      description: post.excerpt || `Read ${post.title} on Orinowo's blog - insights about AI music generation and creative technology.`,
+      type: 'article',
+      publishedTime: publishedDate,
+      authors: [post.author],
+      images: [
+        {
+          url: post.image_url || '/og-blog-default.jpg',
+          width: 1200,
+          height: 630,
+          alt: post.title,
+        }
+      ],
+      siteName: 'Orinowo',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${post.title} - Orinowo Blog`,
+      description: post.excerpt || `Read ${post.title} on Orinowo's blog - insights about AI music generation and creative technology.`,
+      images: [post.image_url || '/og-blog-default.jpg'],
+      creator: '@orinowo',
+    },
+    alternates: {
+      canonical: `https://orinowo.com/blog/${post.slug}`,
+    },
+    other: {
+      'article:author': post.author,
+      'article:published_time': publishedDate,
+      'article:section': 'Technology',
+      'article:tag': post.tags?.join(', ') || 'AI Music, Music Technology, Creative Tools',
+    }
+  }
 }
 
 async function getBlogPost(slug: string): Promise<BlogPost | null> {
@@ -138,10 +210,12 @@ export default async function BlogPostPage({
           <header className="mb-12">
             {post.image_url && (
               <div className="relative aspect-video rounded-2xl overflow-hidden mb-8">
-                <img
+                <Image
                   src={post.image_url}
                   alt={post.title}
-                  className="absolute inset-0 w-full h-full object-cover"
+                  fill
+                  className="object-cover"
+                  priority
                 />
               </div>
             )}
