@@ -7,6 +7,7 @@ create table if not exists public.track_stats (
   likes int not null default 0,
   downloads int not null default 0,
   earnings numeric not null default 0,
+  sponsor_clicks int not null default 0,
   last_updated timestamptz not null default now()
 );
 

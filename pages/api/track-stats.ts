@@ -51,7 +51,7 @@ async function updateStat(req: NextApiRequest, res: NextApiResponse) {
     // Upsert-like behavior: ensure a row exists, then increment
     const { data: existing, error: findError } = await supabase
       .from('track_stats')
-      .select('id, plays, likes, downloads, earnings')
+      .select('id, plays, likes, downloads, earnings, sponsor_clicks')
       .eq('track_id', track_id)
       .maybeSingle()
 
@@ -66,6 +66,7 @@ async function updateStat(req: NextApiRequest, res: NextApiResponse) {
         plays: action === 'play' ? inc : 0,
         likes: action === 'like' ? inc : 0,
         downloads: action === 'download' ? inc : 0,
+        sponsor_clicks: action === 'sponsor_click' ? inc : 0,
         earnings: action === 'earn' ? inc : 0,
       }
       const { error: insertError } = await supabase.from('track_stats').insert(initial)
@@ -79,7 +80,20 @@ async function updateStat(req: NextApiRequest, res: NextApiResponse) {
       if (action === 'play') patch.plays = (existing.plays || 0) + inc
       if (action === 'like') patch.likes = (existing.likes || 0) + inc
       if (action === 'download') patch.downloads = (existing.downloads || 0) + inc
+      if (action === 'sponsor_click') patch.sponsor_clicks = (existing.sponsor_clicks || 0) + inc
       if (action === 'earn') patch.earnings = Number(existing.earnings || 0) + inc
+
+      // Ad revenue sharing: +$0.5 per 100 sponsor clicks
+      if (action === 'sponsor_click') {
+        const totalClicks = (existing.sponsor_clicks || 0) + inc
+        const prevBuckets = Math.floor((existing.sponsor_clicks || 0) / 100)
+        const currBuckets = Math.floor(totalClicks / 100)
+        const bucketsDelta = currBuckets - prevBuckets
+        if (bucketsDelta > 0) {
+          const bonus = 0.5 * bucketsDelta
+          patch.earnings = Number(existing.earnings || 0) + (patch.earnings ? Number(patch.earnings) : 0) + bonus
+        }
+      }
 
       const { error: updateError } = await supabase
         .from('track_stats')
