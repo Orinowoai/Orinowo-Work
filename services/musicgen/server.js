@@ -15,7 +15,41 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 
 // In-memory cooldowns and background jobs (ephemeral)
 const cooldowns = new Map(); // key: user_ip, value: timestamp (ms)
-const jobs = new Map(); // key: request_id, value: { status, audio_url?, track_id?, error? }
+const jobs = new Map(); // key: request_id, value: { status, audio_url?, track_id?, error?, model_used?, model_label? }
+
+// Semaphore queue to limit concurrent provider calls
+const MAX_CONCURRENT = 2;
+let activeProviderCalls = 0;
+const waitQueue = [];
+async function enqueue(task) {
+  return new Promise((resolve, reject) => {
+    const run = async () => {
+      activeProviderCalls++;
+      try {
+        const result = await task();
+        resolve(result);
+      } catch (e) {
+        reject(e);
+      } finally {
+        activeProviderCalls = Math.max(0, activeProviderCalls - 1);
+        const next = waitQueue.shift();
+        if (next) next();
+      }
+    };
+    if (activeProviderCalls < MAX_CONCURRENT) {
+      run();
+    } else {
+      console.log('Queued');
+      waitQueue.push(run);
+    }
+  });
+}
+
+// Metrics aggregates
+let totalRequests = 0;
+let totalCompletions = 0;
+let totalLatencyMs = 0;
+let cacheHitCount = 0;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -27,36 +61,55 @@ function getClientIp(req) {
   return req.headers['x-real-ip'] || req.ip || 'unknown';
 }
 
-async function generateTrack(prompt, duration, { endpoint, key }) {
-  const maxAttempts = 3;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      console.log(`Retry ${attempt}/${maxAttempts} — calling AI provider`);
-      const response = await axios.post(
-        endpoint,
-        { prompt, duration },
-        {
-          headers: {
-            Authorization: `Bearer ${key}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 60000,
-        }
-      );
-      const replicateResponse = response?.data || {};
-      const audioUrl = Array.isArray(replicateResponse.output)
-        ? replicateResponse.output[0]
-        : null;
-      if (!audioUrl) throw new Error('No audio URL from provider');
-      return audioUrl;
-    } catch (e) {
-      const msg = e?.message || String(e);
-      console.warn(`Generation attempt ${attempt} failed:`, msg);
-      if (attempt < maxAttempts) {
-        await sleep(3000);
-        continue;
+function getModels() {
+  return {
+    primary: process.env.REPLICATE_MODEL_PRIMARY || 'primary-default',
+    fast: process.env.REPLICATE_MODEL_FAST || 'fast-default',
+    fallback: process.env.REPLICATE_MODEL_FALLBACK || 'fallback-default',
+  };
+}
+
+async function callProvider(prompt, duration, modelVersion, { endpoint, key }, timeoutMs) {
+  console.log(`Model chosen: ${modelVersion}`);
+  const response = await axios.post(
+    endpoint,
+    { prompt, duration, model: modelVersion },
+    {
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: timeoutMs,
+    }
+  );
+  const data = response?.data || {};
+  const audioUrl = Array.isArray(data.output) ? data.output[0] : null;
+  if (!audioUrl) throw new Error('No audio URL from provider');
+  return audioUrl;
+}
+
+async function callProviderWithModel(prompt, duration, { endpoint, key, estimatedCost }) {
+  const { primary, fast, fallback } = getModels();
+  const MAX_COST = parseFloat(process.env.MAX_COST_PER_GEN || '0') || Number.POSITIVE_INFINITY;
+  let selected = estimatedCost > MAX_COST ? fast : primary;
+  try {
+    const audioUrl = await enqueue(() => callProvider(prompt, duration, selected, { endpoint, key }, selected === primary ? 45_000 : 60_000));
+    return { audioUrl, modelUsed: selected };
+  } catch (e) {
+    const isTimeout = (e?.code === 'ECONNABORTED') || /timeout/i.test(String(e?.message || ''));
+    if (selected === primary && isTimeout) {
+      try {
+        const audioUrl = await enqueue(() => callProvider(prompt, duration, fast, { endpoint, key }, 60_000));
+        return { audioUrl, modelUsed: fast };
+      } catch (e2) {
+        console.warn('Fallback used');
+        const audioUrl = await enqueue(() => callProvider(prompt, duration, fallback, { endpoint, key }, 60_000));
+        return { audioUrl, modelUsed: fallback };
       }
-      throw e;
+    } else {
+      console.warn('Fallback used');
+      const audioUrl = await enqueue(() => callProvider(prompt, duration, fallback, { endpoint, key }, 60_000));
+      return { audioUrl, modelUsed: fallback };
     }
   }
 }
@@ -99,6 +152,7 @@ app.post('/generate', async (req, res) => {
     }, 60_000).unref?.();
 
     // Log start (pending)
+    totalRequests++;
     const startedAt = Date.now();
     let logId = null;
     try {
@@ -133,15 +187,18 @@ app.post('/generate', async (req, res) => {
         console.warn('Cache lookup error:', cacheError.message || cacheError);
       } else if (cached && cached.audio_url) {
         console.log('Cache hit');
+        cacheHitCount++;
         // log success with cache hit
         const latency = Date.now() - startedAt;
         if (logId) {
           await supabase
             .from('generation_logs')
-            .update({ status: 'success', latency, is_cache_hit: true })
+            .update({ status: 'success', latency, is_cache_hit: true, model_used: 'cache', cost_est: 0 })
             .eq('id', logId);
         }
-        return res.json({ success: true, audio_url: cached.audio_url, cached: true });
+        totalCompletions++;
+        totalLatencyMs += latency;
+        return res.json({ success: true, audio_url: cached.audio_url, cached: true, model_label: 'Cache' });
       }
     } catch (e) {
       console.warn('Cache check failed:', e?.message || e);
@@ -154,8 +211,10 @@ app.post('/generate', async (req, res) => {
 
     (async () => {
       try {
-        // 1) Call provider with retries
-        const audioUrl = await generateTrack(prompt, duration, { endpoint: AI_MUSIC_ENDPOINT, key: AI_MUSIC_KEY });
+        // 1) Select model based on cost and fallbacks; use queue to limit concurrency
+        const BASE_RATE = 0.002; // £ per second
+        const estCost = (Number(duration) || 0) * BASE_RATE;
+        const { audioUrl, modelUsed } = await callProviderWithModel(prompt, duration, { endpoint: AI_MUSIC_ENDPOINT, key: AI_MUSIC_KEY, estimatedCost: estCost });
 
         // 2) Fetch generated audio bytes
         let audioResp;
@@ -217,15 +276,18 @@ app.post('/generate', async (req, res) => {
           console.warn('Cache insert failed:', e?.message || e);
         }
 
-        jobs.set(requestId, { status: 'done', audio_url: publicUrl, track_id: inserted.id });
+        const modelLabel = (modelUsed && modelUsed.includes('fast')) ? 'Fast Mode' : (modelUsed && modelUsed.includes('fallback')) ? 'Fallback' : 'High Quality';
+        jobs.set(requestId, { status: 'done', audio_url: publicUrl, track_id: inserted.id, model_used: modelUsed, model_label: modelLabel });
         // update log success
         try {
           if (logId) {
             const latency = Date.now() - startedAt;
             await supabase
               .from('generation_logs')
-              .update({ status: 'success', latency, is_cache_hit: false })
+              .update({ status: 'success', latency, is_cache_hit: false, model_used: modelUsed, cost_est: estCost })
               .eq('id', logId);
+            totalCompletions++;
+            totalLatencyMs += latency;
           }
         } catch {}
         console.log('Success');
@@ -262,6 +324,13 @@ app.get('/status/:id', (req, res) => {
   const job = jobs.get(id);
   if (!job) return res.status(404).json({ status: 'not_found' });
   return res.json(job);
+});
+
+// Metrics endpoint for autoscaling
+app.get('/metrics', (req, res) => {
+  const avgLatency = totalCompletions > 0 ? totalLatencyMs / totalCompletions : 0;
+  const cacheHitRate = totalRequests > 0 ? cacheHitCount / totalRequests : 0;
+  res.json({ activeRequests: activeProviderCalls, avgLatency, cacheHitRate });
 });
 
 app.listen(port, () => {

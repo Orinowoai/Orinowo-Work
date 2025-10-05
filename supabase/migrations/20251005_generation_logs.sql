@@ -8,6 +8,8 @@ create table if not exists public.generation_logs (
   country text,
   status text,
   is_cache_hit boolean default false,
+  model_used text,
+  cost_est numeric,
   latency numeric,
   created_at timestamp with time zone default now()
 );
