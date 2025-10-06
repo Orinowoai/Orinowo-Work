@@ -81,7 +81,7 @@ function getModels() {
 
 async function callProvider(prompt, duration, modelVersion, { endpoint, key }, timeoutMs) {
   console.log(`Model chosen: ${modelVersion}`);
-  const isReplicateStyle = (!!process.env.AI_MUSIC_VERSION && /replicate/i.test(String(endpoint || ''))) || /replicate/i.test(String(endpoint || ''));
+  const isReplicateStyle = !!process.env.AI_MUSIC_VERSION || /replicate/i.test(String(endpoint || ''));
 
   const headers = {
     'Content-Type': 'application/json',
@@ -193,6 +193,45 @@ app.post('/api/musicgen', async (req, res) => {
 
 // Lightweight probe for the compatibility route
 app.get('/api/musicgen', (req, res) => {
+  res.json({ ok: true, endpoint: process.env.AI_MUSIC_ENDPOINT ? 'configured' : 'missing', version: process.env.AI_MUSIC_VERSION ? 'set' : 'unset' });
+});
+
+// Alternate compatibility path to avoid potential provider/proxy filters on /api/*
+app.post('/compat/musicgen', async (req, res) => {
+  try {
+    const { prompt, duration } = req.body || {};
+    const endpoint = process.env.AI_MUSIC_ENDPOINT;
+    const version = process.env.AI_MUSIC_VERSION;
+    const key = process.env.AI_MUSIC_KEY;
+    if (!endpoint || !key) {
+      return res.status(500).json({ error: 'AI service not configured' });
+    }
+    const response = await axios.post(
+      endpoint,
+      {
+        version: version,
+        input: {
+          prompt_a: prompt || 'afrobeat instrumental',
+          duration: duration || 30,
+        },
+      },
+      {
+        headers: {
+          Authorization: `Token ${key}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 60000,
+      }
+    );
+    return res.json(response.data);
+  } catch (err) {
+    const details = err?.response?.data || err?.message || String(err);
+    console.error('MusicGen compat error:', details);
+    return res.status(500).json({ error: 'AI music generation failed.' });
+  }
+});
+
+app.get('/compat/musicgen', (req, res) => {
   res.json({ ok: true, endpoint: process.env.AI_MUSIC_ENDPOINT ? 'configured' : 'missing', version: process.env.AI_MUSIC_VERSION ? 'set' : 'unset' });
 });
 
