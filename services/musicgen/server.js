@@ -469,6 +469,28 @@ app.get('/metrics', (req, res) => {
   res.json({ activeRequests: activeProviderCalls, avgLatency, cacheHitRate });
 });
 
+// Debug: list all routes (enable via DEBUG_ROUTES=true)
+app.get('/_routes', (req, res) => {
+  if (String(process.env.DEBUG_ROUTES).toLowerCase() !== 'true') {
+    return res.status(404).send('Not found');
+  }
+  const routes = [];
+  app._router.stack.forEach((m) => {
+    if (m.route && m.route.path) {
+      const methods = Object.keys(m.route.methods || {}).filter(Boolean);
+      routes.push({ path: m.route.path, methods });
+    } else if (m.name === 'router' && m.handle && m.handle.stack) {
+      m.handle.stack.forEach((h) => {
+        if (h.route && h.route.path) {
+          const methods = Object.keys(h.route.methods || {}).filter(Boolean);
+          routes.push({ path: h.route.path, methods });
+        }
+      });
+    }
+  });
+  res.json({ routes });
+});
+
 app.listen(PORT, () => {
   console.log(`Music generation service running on port ${PORT}`);
 });
