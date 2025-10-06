@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 let translate;
 try {
@@ -13,7 +14,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const port = process.env.PORT || 8080;
+const PORT = process.env.PORT || 8080;
 
 // Supabase client (requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)
 console.log("Supabase URL:", process.env.SUPABASE_URL ? "Loaded " : "Missing ");
@@ -129,6 +130,41 @@ app.get("/", (req, res) => {
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'musicgen', time: new Date().toISOString() });
+});
+
+// Compatibility endpoint as requested: POST /api/musicgen
+app.post('/api/musicgen', async (req, res) => {
+  try {
+    const { prompt, duration } = req.body || {};
+    const endpoint = process.env.AI_MUSIC_ENDPOINT;
+    const version = process.env.AI_MUSIC_VERSION;
+    const key = process.env.AI_MUSIC_KEY;
+    if (!endpoint || !key) {
+      return res.status(500).json({ error: 'AI service not configured' });
+    }
+    const response = await axios.post(
+      endpoint,
+      {
+        version: version,
+        input: {
+          prompt_a: prompt || 'afrobeat instrumental',
+          duration: duration || 30,
+        },
+      },
+      {
+        headers: {
+          Authorization: `Token ${key}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 60000,
+      }
+    );
+    return res.json(response.data);
+  } catch (err) {
+    const details = err?.response?.data || err?.message || String(err);
+    console.error('MusicGen error:', details);
+    return res.status(500).json({ error: 'AI music generation failed.' });
+  }
 });
 
 app.post('/generate', async (req, res) => {
@@ -362,6 +398,6 @@ app.get('/metrics', (req, res) => {
   res.json({ activeRequests: activeProviderCalls, avgLatency, cacheHitRate });
 });
 
-app.listen(port, () => {
-  console.log(` Music generation service listening on port ${port}`);
+app.listen(PORT, () => {
+  console.log(`Music generation service running on port ${PORT}`);
 });
