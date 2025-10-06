@@ -152,7 +152,7 @@ async function callProviderWithModel(prompt, duration, { endpoint, key, estimate
 }
 
 app.get("/", (req, res) => {
-  res.send(" Orinowo MusicGen service is live");
+  res.send(" Orinowo MusicGen service is live - v2025-10-06-1");
 });
 
 app.get('/health', (req, res) => {
