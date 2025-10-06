@@ -81,19 +81,39 @@ function getModels() {
 
 async function callProvider(prompt, duration, modelVersion, { endpoint, key }, timeoutMs) {
   console.log(`Model chosen: ${modelVersion}`);
-  const response = await axios.post(
-    endpoint,
-    { prompt, duration, model: modelVersion },
-    {
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      timeout: timeoutMs,
-    }
-  );
+  const isReplicateStyle = !!process.env.AI_MUSIC_VERSION || /replicate/i.test(String(endpoint || ''));
+
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: isReplicateStyle ? `Token ${key}` : `Bearer ${key}`,
+  };
+
+  // Build payload based on provider style
+  const payload = isReplicateStyle
+    ? {
+        version: process.env.AI_MUSIC_VERSION,
+        input: {
+          prompt_a: prompt,
+          duration: Number(duration) || 30,
+        },
+      }
+    : {
+        prompt,
+        duration,
+        model: modelVersion,
+      };
+
+  const response = await axios.post(endpoint, payload, { headers, timeout: timeoutMs });
   const data = response?.data || {};
-  const audioUrl = Array.isArray(data.output) ? data.output[0] : null;
+
+  // Try common shapes for audio URL
+  const audioUrl =
+    (Array.isArray(data.output) && data.output[0]) ||
+    data.audio_url ||
+    data.audio ||
+    (Array.isArray(data.audio) && data.audio[0]) ||
+    null;
+
   if (!audioUrl) throw new Error('No audio URL from provider');
   return audioUrl;
 }
