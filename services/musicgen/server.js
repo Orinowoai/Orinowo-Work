@@ -81,7 +81,7 @@ function getModels() {
 
 async function callProvider(prompt, duration, modelVersion, { endpoint, key }, timeoutMs) {
   console.log(`Model chosen: ${modelVersion}`);
-  const isReplicateStyle = !!process.env.AI_MUSIC_VERSION || /replicate/i.test(String(endpoint || ''));
+  const isReplicateStyle = (!!process.env.AI_MUSIC_VERSION && /replicate/i.test(String(endpoint || ''))) || /replicate/i.test(String(endpoint || ''));
 
   const headers = {
     'Content-Type': 'application/json',
@@ -89,9 +89,13 @@ async function callProvider(prompt, duration, modelVersion, { endpoint, key }, t
   };
 
   // Build payload based on provider style
+  const version = process.env.AI_MUSIC_VERSION;
+  if (isReplicateStyle && !version) {
+    throw new Error('AI_MUSIC_VERSION is not set for Replicate-style endpoint');
+  }
   const payload = isReplicateStyle
     ? {
-        version: process.env.AI_MUSIC_VERSION,
+        version,
         input: {
           prompt_a: prompt,
           duration: Number(duration) || 30,
@@ -185,6 +189,11 @@ app.post('/api/musicgen', async (req, res) => {
     console.error('MusicGen error:', details);
     return res.status(500).json({ error: 'AI music generation failed.' });
   }
+});
+
+// Lightweight probe for the compatibility route
+app.get('/api/musicgen', (req, res) => {
+  res.json({ ok: true, endpoint: process.env.AI_MUSIC_ENDPOINT ? 'configured' : 'missing', version: process.env.AI_MUSIC_VERSION ? 'set' : 'unset' });
 });
 
 app.post('/generate', async (req, res) => {
