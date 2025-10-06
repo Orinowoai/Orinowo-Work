@@ -97,8 +97,11 @@ async function callProvider(prompt, duration, modelVersion, { endpoint, key }, t
     ? {
         version,
         input: {
+          // include common variants to maximize compatibility across models
+          prompt: prompt,
           prompt_a: prompt,
           duration: Number(duration) || 30,
+          duration_seconds: Number(duration) || 30,
         },
       }
     : {
