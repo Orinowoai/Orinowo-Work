@@ -130,7 +130,7 @@ async function pollReplicatePrediction(getUrl, headers, deadlineMs) {
   return url;
 }
 
-async function callProvider(prompt, duration, modelVersion, { endpoint, key }, timeoutMs) {
+async function callProvider(prompt, duration, modelVersion, { endpoint, key, requestId }, timeoutMs) {
   console.log(`Model chosen: ${modelVersion}`);
   const isReplicateStyle = !!process.env.AI_MUSIC_VERSION || /replicate/i.test(String(endpoint || ''));
 
@@ -162,9 +162,35 @@ async function callProvider(prompt, duration, modelVersion, { endpoint, key }, t
       };
 
   // For Replicate-style endpoints, a POST usually returns a prediction object to poll.
-  const response = await axios.post(endpoint, payload, { headers, timeout: timeoutMs });
+  let response;
+  try {
+    response = await axios.post(endpoint, payload, { headers, timeout: timeoutMs });
+  } catch (err) {
+    const errBody = err?.response?.data || err?.message || String(err);
+    try {
+      console.error('Replicate API error:', typeof errBody === 'string' ? errBody : JSON.stringify(errBody));
+    } catch {}
+    // Save job error if we have a requestId context
+    if (requestId) {
+      jobs.set(requestId, { status: 'error', error: err?.response?.data || err.message });
+    }
+    throw err;
+  }
   console.log("DEBUG full Replicate response:", JSON.stringify(response.data, null, 2));
   const data = response?.data || {};
+
+  // Immediate audio URL check (common variants): output[0] or urls.audio
+  try {
+    let immediateAudio = null;
+    if (Array.isArray(data?.output) && data.output[0]) {
+      immediateAudio = data.output[0];
+    } else if (data?.urls?.audio) {
+      immediateAudio = data.urls.audio;
+    }
+    if (immediateAudio && requestId) {
+      jobs.set(requestId, { status: 'done', audio_url: immediateAudio });
+    }
+  } catch {}
 
   if (isReplicateStyle) {
     // First, try direct output (some hosted gateways may return output immediately).
@@ -206,22 +232,22 @@ async function callProvider(prompt, duration, modelVersion, { endpoint, key }, t
   return genericUrl;
 }
 
-async function callProviderWithModel(prompt, duration, { endpoint, key, estimatedCost }) {
+async function callProviderWithModel(prompt, duration, { endpoint, key, estimatedCost, requestId }) {
   const { primary, fast, fallback } = getModels();
   const MAX_COST = parseFloat(process.env.MAX_COST_PER_GEN || '0') || Number.POSITIVE_INFINITY;
   let selected = estimatedCost > MAX_COST ? fast : primary;
   try {
-  const audioUrl = await enqueue(() => callProvider(prompt, duration, selected, { endpoint, key }, selected === primary ? 120_000 : 150_000));
+  const audioUrl = await enqueue(() => callProvider(prompt, duration, selected, { endpoint, key, requestId }, selected === primary ? 120_000 : 150_000));
     return { audioUrl, modelUsed: selected };
   } catch (e) {
     const isTimeout = (e?.code === 'ECONNABORTED') || /timeout/i.test(String(e?.message || ''));
     if (selected === primary && isTimeout) {
       try {
-  const audioUrl = await enqueue(() => callProvider(prompt, duration, fast, { endpoint, key }, 150_000));
+  const audioUrl = await enqueue(() => callProvider(prompt, duration, fast, { endpoint, key, requestId }, 150_000));
         return { audioUrl, modelUsed: fast };
       } catch (e2) {
         console.warn('Fallback used');
-  const audioUrl = await enqueue(() => callProvider(prompt, duration, fallback, { endpoint, key }, 150_000));
+  const audioUrl = await enqueue(() => callProvider(prompt, duration, fallback, { endpoint, key, requestId }, 150_000));
         return { audioUrl, modelUsed: fallback };
       }
     } else {
@@ -535,7 +561,7 @@ app.post('/generate', async (req, res) => {
         // 1) Select model based on cost and fallbacks; use queue to limit concurrency
         const BASE_RATE = 0.002; // £ per second
         const estCost = (Number(duration) || 0) * BASE_RATE;
-  const { audioUrl, modelUsed } = await callProviderWithModel(englishPrompt, duration, { endpoint: AI_MUSIC_ENDPOINT, key: AI_MUSIC_KEY, estimatedCost: estCost });
+  const { audioUrl, modelUsed } = await callProviderWithModel(englishPrompt, duration, { endpoint: AI_MUSIC_ENDPOINT, key: AI_MUSIC_KEY, estimatedCost: estCost, requestId });
 
         // 2) Fetch generated audio bytes
         let audioResp;
