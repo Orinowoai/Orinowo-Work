@@ -143,31 +143,26 @@ function extractAudioUrl(data) {
 }
 
 async function pollReplicatePrediction(getUrl, headers, deadlineMs) {
-  // Wait up to 150 seconds for Replicate to finish
-  let maxWait = 150; // seconds
-  let waited = 0;
-  let status = null;
+  const pollIntervalMs = 5000;
   let response = null;
-
-  while (waited < maxWait) {
-    await new Promise(resolve => setTimeout(resolve, 5000)); // check every 5 seconds
-    waited += 5;
-
-    const check = await axios.get(getUrl, {
-      headers: { Authorization: `Token ${process.env.AI_MUSIC_KEY}` }
-    });
-    status = check?.data?.status;
-
-    if (status === 'succeeded' || status === 'failed') {
-      response = check.data;
+  while (Date.now() < deadlineMs) {
+    const remaining = Math.max(2000, deadlineMs - Date.now());
+    const check = await axios.get(getUrl, { headers, timeout: Math.min(10_000, remaining) });
+    const pdata = check?.data || {};
+    const status = pdata.status || pdata.state || '';
+    if (status === 'succeeded' || status === 'completed') {
+      response = pdata;
       break;
     }
+    if (status === 'failed' || status === 'canceled' || status === 'cancelled' || status === 'error') {
+      const msg = pdata.error || pdata.logs || `Prediction ${status}`;
+      throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    }
+    await sleep(pollIntervalMs);
   }
-
-  if (status !== 'succeeded') {
-    throw new Error(`Timed out after ${maxWait}s waiting for Replicate prediction.`);
+  if (!response) {
+    throw new Error('Timed out waiting for Replicate prediction');
   }
-
   console.log("DEBUG full Replicate final response:", JSON.stringify(response, null, 2));
   const url = extractAudioUrl(response);
   if (!url) throw new Error('Replicate prediction succeeded but no audio URL in output');
