@@ -173,9 +173,11 @@ async function callProvider(prompt, duration, modelVersion, { endpoint, key, req
   console.log(`Model chosen: ${modelVersion}`);
   const isReplicateStyle = !!process.env.AI_MUSIC_VERSION || /replicate/i.test(String(endpoint || ''));
 
+  const cleanKey = (key || '').toString().trim();
+  let authScheme = isReplicateStyle ? 'Token' : 'Bearer';
   const headers = {
     'Content-Type': 'application/json',
-    Authorization: isReplicateStyle ? `Token ${key}` : `Bearer ${key}`,
+    Authorization: `${authScheme} ${cleanKey}`,
   };
 
   // Build payload based on provider style
@@ -205,15 +207,28 @@ async function callProvider(prompt, duration, modelVersion, { endpoint, key, req
   try {
     response = await axios.post(endpoint, payload, { headers, timeout: timeoutMs });
   } catch (err) {
+    const status = err?.response?.status;
     const errBody = err?.response?.data || err?.message || String(err);
-    try {
-      console.error('Replicate API error:', typeof errBody === 'string' ? errBody : JSON.stringify(errBody));
-    } catch {}
-    // Save job error if we have a requestId context
-    if (requestId) {
-      jobs.set(requestId, { status: 'error', error: err?.response?.data || err.message });
+    try { console.error('Replicate API error:', typeof errBody === 'string' ? errBody : JSON.stringify(errBody)); } catch {}
+    // If unauthorized, retry once with alternate auth scheme (Token <-> Bearer)
+    if (status === 401) {
+      try {
+        authScheme = authScheme === 'Token' ? 'Bearer' : 'Token';
+        const retryHeaders = { ...headers, Authorization: `${authScheme} ${cleanKey}` };
+        console.warn(`Auth 401: retrying with scheme '${authScheme}'`);
+        response = await axios.post(endpoint, payload, { headers: retryHeaders, timeout: timeoutMs });
+        // Update headers for downstream polling
+        headers.Authorization = retryHeaders.Authorization;
+      } catch (err2) {
+        const errBody2 = err2?.response?.data || err2?.message || String(err2);
+        try { console.error('Replicate API retry error:', typeof errBody2 === 'string' ? errBody2 : JSON.stringify(errBody2)); } catch {}
+        if (requestId) { jobs.set(requestId, { status: 'error', error: err2?.response?.data || err2.message }); }
+        throw err2;
+      }
+    } else {
+      if (requestId) { jobs.set(requestId, { status: 'error', error: err?.response?.data || err.message }); }
+      throw err;
     }
-    throw err;
   }
   console.log("DEBUG full Replicate response:", JSON.stringify(response.data, null, 2));
   const data = response?.data || {};
