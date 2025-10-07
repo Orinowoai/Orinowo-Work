@@ -25,12 +25,32 @@ jobs:
       - name: Install deps
         run: npm ci || npm install
 
-      - name: Run smoke tests
+      - name: Discover site URL
+        id: discover
         env:
-          PUBLIC_SITE_URL: ${{ github.event.inputs.site || secrets.PUBLIC_SITE_URL }}
+          INPUT_SITE: ${{ github.event.inputs.site }}
+          DEPLOY_ENV_URL: ${{ github.event.deployment_status.environment_url }}
+          DEPLOY_TARGET_URL: ${{ github.event.deployment_status.target_url }}
+          SECRET_SITE: ${{ secrets.PUBLIC_SITE_URL }}
         run: |
-          if [ -z "$PUBLIC_SITE_URL" ]; then
-            echo "PUBLIC_SITE_URL not provided. Set workflow input 'site' or repo secret 'PUBLIC_SITE_URL'." >&2
+          set -e
+          SITE="$INPUT_SITE"
+          if [ -z "$SITE" ] && [ -n "$DEPLOY_ENV_URL" ]; then SITE="$DEPLOY_ENV_URL"; fi
+          if [ -z "$SITE" ] && [ -n "$DEPLOY_TARGET_URL" ]; then SITE="$DEPLOY_TARGET_URL"; fi
+          if [ -z "$SITE" ] && [ -n "$SECRET_SITE" ]; then SITE="$SECRET_SITE"; fi
+          if [ -z "$SITE" ]; then
+            echo "Could not determine site URL from inputs, deployment event, or secrets." >&2
             exit 1
           fi
-          npm run smoke
+          # Normalize: keep origin only
+          # shellcheck disable=SC2086
+          ORIGIN=$(node -e "try{const u=new URL(process.argv[1]);console.log(u.origin)}catch(e){process.exit(1)}" "$SITE")
+          if [ $? -ne 0 ] || [ -z "$ORIGIN" ]; then
+            echo "Invalid site URL: $SITE" >&2
+            exit 1
+          fi
+          echo "PUBLIC_SITE_URL=$ORIGIN" >> $GITHUB_ENV
+          echo "origin=$ORIGIN" >> $GITHUB_OUTPUT
+
+      - name: Run smoke tests
+        run: npm run smoke
