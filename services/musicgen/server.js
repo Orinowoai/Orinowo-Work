@@ -8,11 +8,16 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Serve static web UI from /public
+// Serve static web UI from service-local public first, then fallback to repo public
 try {
-  const staticDir = path.join(__dirname, '../../public');
-  app.use(express.static(staticDir));
-  console.log('Static UI served from', staticDir);
+  const localStatic = path.join(__dirname, 'public');
+  app.use(express.static(localStatic));
+  console.log('Static UI served from', localStatic);
+} catch {}
+try {
+  const fallbackStatic = path.join(__dirname, '../../public');
+  app.use(express.static(fallbackStatic));
+  console.log('Static UI fallback served from', fallbackStatic);
 } catch {}
 
 app.get('/health', (req, res) => {

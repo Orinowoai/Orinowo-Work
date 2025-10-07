@@ -42,7 +42,8 @@
   </div>
 
   <script>
-    const baseUrl = 'https://orinowo-work.onrender.com';
+    // Use same-origin by default so this page works wherever the service is hosted
+    const baseUrl = '';
     const $ = (id) => document.getElementById(id);
     const statusEl = $('status');
     const player = $('player');
@@ -54,17 +55,7 @@
 
     async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-    async function pollStatus(id, maxMs = 150000) {
-      const start = Date.now();
-      while (Date.now() - start < maxMs) {
-        const r = await fetch(`${baseUrl}/status/${encodeURIComponent(id)}`);
-        const data = await r.json();
-        if (data.status !== 'processing') return data;
-        setStatus('processing…');
-        await sleep(5000);
-      }
-      return { status: 'timeout' };
-    }
+    // No background status in current flow; direct generation returns audio
 
     $('generate').addEventListener('click', async () => {
       const prompt = $('prompt').value.trim();
@@ -73,7 +64,7 @@
 
       if (!prompt) { setStatus('Please enter a prompt.', true); return; }
 
-      setStatus('Starting…');
+      setStatus('Generating… (can take up to ~60–120s on cold start)');
       $('generate').disabled = true;
       try {
         const resp = await fetch(`${baseUrl}/generate`, {
@@ -81,29 +72,18 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ prompt, duration })
         });
-        const data = await resp.json();
-        if (!resp.ok) throw new Error(data?.error || 'Failed to start');
-        const id = data.request_id;
-        if (!id) throw new Error('No request_id returned');
-
-        setStatus('processing…');
-        const final = await pollStatus(id);
-        if (final.status === 'done' || final.status === 'succeeded') {
-          if (final.audio_url) {
-            setStatus('done');
-            player.src = final.audio_url;
-            try { await player.play(); } catch {}
-          } else {
-            setStatus('done but no audio_url in response.', true);
-            console.warn('Final status missing audio_url:', final);
-          }
-        } else if (final.status === 'timeout') {
-          setStatus('Timed out after waiting. Try again.', true);
-        } else {
-          setStatus(`error: ${final.error || final.status}`, true);
-        }
+        const text = await resp.text();
+        let data = {};
+        try { data = JSON.parse(text); } catch {}
+        if (!resp.ok) throw new Error((data && data.error) || text || 'Generation failed');
+        const url = (data && (data.audio_url || data.result)) || null;
+        if (!url) throw new Error('No audio_url in response');
+        setStatus('Done');
+        player.src = url;
+        try { await player.play(); } catch {}
       } catch (e) {
-        setStatus(`error: ${e.message}`, true);
+        const msg = e && e.message ? e.message : String(e);
+        setStatus(`error: ${msg}`, true);
       } finally {
         $('generate').disabled = false;
       }
