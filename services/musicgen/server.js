@@ -255,8 +255,10 @@ app.post('/api/musicgen', async (req, res) => {
       {
         version: version,
         input: {
+          prompt: prompt || 'afrobeat instrumental',
           prompt_a: prompt || 'afrobeat instrumental',
           duration: duration || 30,
+          duration_seconds: duration || 30,
         },
       },
       {
@@ -264,10 +266,60 @@ app.post('/api/musicgen', async (req, res) => {
           Authorization: `Token ${key}`,
           'Content-Type': 'application/json',
         },
-        timeout: 60000,
+        timeout: 120000,
       }
     );
-    return res.json(response.data);
+
+    // Wait for completion if needed (Replicate-style)
+    let prediction = response.data;
+    if (prediction && prediction.urls && prediction.urls.get && prediction.status !== 'succeeded') {
+      let maxWait = 150; // seconds
+      let waited = 0;
+      let status = prediction.status;
+      while (waited < maxWait && status !== 'succeeded' && status !== 'failed') {
+        await new Promise(r => setTimeout(r, 5000)); // 5s
+        waited += 5;
+        const check = await axios.get(prediction.urls.get, { headers: { Authorization: `Token ${key}` } });
+        status = check?.data?.status;
+        if (status === 'succeeded' || status === 'failed') {
+          prediction = check.data;
+          break;
+        }
+      }
+      if (status !== 'succeeded') {
+        return res.status(200).json({ status: status || 'unknown', message: `Timed out after ${maxWait}s waiting for Replicate prediction.`, replicate_output: prediction });
+      }
+    }
+
+    // ✅ Handle final Replicate response
+    console.log("DEBUG full Replicate final response:", JSON.stringify(prediction, null, 2));
+
+    // Extract audio URL safely
+    let audioUrl = null;
+    if (prediction && prediction.output) {
+      if (Array.isArray(prediction.output)) {
+        audioUrl = prediction.output[0];
+      } else if (typeof prediction.output === 'object' && prediction.output.audio) {
+        audioUrl = prediction.output.audio;
+      }
+    }
+
+    // Build final result
+    if (!audioUrl) {
+      console.warn("\u26A0\uFE0F No audio URL found in Replicate response. Check output structure.");
+      return res.status(200).json({
+        status: prediction?.status || 'unknown',
+        message: 'Generation succeeded but no audio URL found',
+        replicate_output: prediction,
+      });
+    }
+
+    return res.status(200).json({
+      status: 'succeeded',
+      audio_url: audioUrl,
+      duration,
+      prompt,
+    });
   } catch (err) {
     const details = err?.response?.data || err?.message || String(err);
     console.error('MusicGen error:', details);
@@ -295,8 +347,10 @@ app.post('/compat/musicgen', async (req, res) => {
       {
         version: version,
         input: {
+          prompt: prompt || 'afrobeat instrumental',
           prompt_a: prompt || 'afrobeat instrumental',
           duration: duration || 30,
+          duration_seconds: duration || 30,
         },
       },
       {
@@ -304,10 +358,60 @@ app.post('/compat/musicgen', async (req, res) => {
           Authorization: `Token ${key}`,
           'Content-Type': 'application/json',
         },
-        timeout: 60000,
+        timeout: 120000,
       }
     );
-    return res.json(response.data);
+
+    // Wait for completion if needed (Replicate-style)
+    let prediction = response.data;
+    if (prediction && prediction.urls && prediction.urls.get && prediction.status !== 'succeeded') {
+      let maxWait = 150; // seconds
+      let waited = 0;
+      let status = prediction.status;
+      while (waited < maxWait && status !== 'succeeded' && status !== 'failed') {
+        await new Promise(r => setTimeout(r, 5000)); // 5s
+        waited += 5;
+        const check = await axios.get(prediction.urls.get, { headers: { Authorization: `Token ${key}` } });
+        status = check?.data?.status;
+        if (status === 'succeeded' || status === 'failed') {
+          prediction = check.data;
+          break;
+        }
+      }
+      if (status !== 'succeeded') {
+        return res.status(200).json({ status: status || 'unknown', message: `Timed out after ${maxWait}s waiting for Replicate prediction.`, replicate_output: prediction });
+      }
+    }
+
+    // ✅ Handle final Replicate response
+    console.log("DEBUG full Replicate final response:", JSON.stringify(prediction, null, 2));
+
+    // Extract audio URL safely
+    let audioUrl = null;
+    if (prediction && prediction.output) {
+      if (Array.isArray(prediction.output)) {
+        audioUrl = prediction.output[0];
+      } else if (typeof prediction.output === 'object' && prediction.output.audio) {
+        audioUrl = prediction.output.audio;
+      }
+    }
+
+    // Build final result
+    if (!audioUrl) {
+      console.warn("\u26A0\uFE0F No audio URL found in Replicate response. Check output structure.");
+      return res.status(200).json({
+        status: prediction?.status || 'unknown',
+        message: 'Generation succeeded but no audio URL found',
+        replicate_output: prediction,
+      });
+    }
+
+    return res.status(200).json({
+      status: 'succeeded',
+      audio_url: audioUrl,
+      duration,
+      prompt,
+    });
   } catch (err) {
     const details = err?.response?.data || err?.message || String(err);
     console.error('MusicGen compat error:', details);
