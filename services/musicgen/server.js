@@ -37,15 +37,9 @@ app.post('/generate', async (req, res) => {
     // Use explicit MusicGen model endpoint
     const endpoint = 'https://api-inference.huggingface.co/models/facebook/musicgen-small';
 
-    // Rough token-length mapping to requested seconds
-    const seconds = Number.isFinite(Number(duration)) ? Math.max(1, Math.min(60, Math.floor(Number(duration)))) : 15;
-    const maxNewTokens = Math.max(128, Math.min(1024, seconds * 64));
-
-    const body = {
-      inputs: prompt,
-      parameters: { max_new_tokens: maxNewTokens },
-      options: { wait_for_model: true, use_cache: true }
-    };
+    // HF simple request body (minimal expected format)
+    // We keep duration client-side only; HF will decide length/model-specific behavior
+    const body = { inputs: prompt };
 
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     const maxTimeMs = 150000; // 150s cap
@@ -56,6 +50,8 @@ app.post('/generate', async (req, res) => {
     while (Date.now() - start < maxTimeMs) {
       attempt++;
       try {
+        const remaining = Math.max(10_000, maxTimeMs - (Date.now() - start));
+        console.log(`[HF] Attempt ${attempt}: POST ${endpoint} (timeout ${remaining}ms)`);
         const response = await axios.post(endpoint, body, {
           headers: {
             'Authorization': `Bearer ${apiKey}`,
@@ -63,10 +59,11 @@ app.post('/generate', async (req, res) => {
             'Accept': 'audio/mpeg'
           },
           responseType: 'arraybuffer',
-          timeout: Math.max(10_000, maxTimeMs - (Date.now() - start))
+          timeout: remaining
         });
 
         const ct = (response.headers && response.headers['content-type']) || '';
+        console.log(`[HF] Response attempt ${attempt}: status ${response.status}, content-type ${ct}`);
         // If audio is returned as binary
         if (/audio\//i.test(ct)) {
           const audioBase64 = Buffer.from(response.data).toString('base64');
@@ -79,6 +76,7 @@ app.post('/generate', async (req, res) => {
         try {
           const text = Buffer.from(response.data).toString('utf8');
           const data = JSON.parse(text);
+          console.log('[HF] JSON body:', JSON.stringify(data).slice(0, 500));
           if (data.error || data.estimated_time) {
             const waitMs = Math.min(15_000, Math.ceil((data.estimated_time || 5) * 1000));
             console.log(`Model not ready (attempt ${attempt}). Waiting ${waitMs}ms...`);
@@ -104,6 +102,10 @@ app.post('/generate', async (req, res) => {
           const detail = (() => { try { return JSON.stringify(e?.response?.data); } catch { return 'Unauthorized'; } })();
           return res.status(401).json({ status: 'error', error: 'Unauthorized: check HF_API_KEY', details: detail });
         }
+        if (status === 403) {
+          const detail = (() => { try { return JSON.stringify(e?.response?.data); } catch { return 'Forbidden'; } })();
+          return res.status(403).json({ status: 'error', error: 'Forbidden: check model access/quota', details: detail });
+        }
         // Retry on model loading (503) or rate limiting (429)
         if (status === 503 || status === 429) {
           const details = (() => {
@@ -111,6 +113,15 @@ app.post('/generate', async (req, res) => {
           })();
           const backoff = Math.min(15_000, 2000 * attempt);
           console.log(`HF ${status} (attempt ${attempt}): ${details}. Retrying in ${backoff}ms...`);
+          await sleep(backoff);
+          continue;
+        }
+        // Network/timeout errors
+        if (!status) {
+          const code = e?.code || 'UNKNOWN';
+          const msg = e?.message || String(e);
+          console.warn(`[HF] Network error (attempt ${attempt}) code=${code} message=${msg}`);
+          const backoff = Math.min(15_000, 2000 * attempt);
           await sleep(backoff);
           continue;
         }
