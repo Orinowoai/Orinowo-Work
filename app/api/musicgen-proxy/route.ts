@@ -12,9 +12,20 @@ const HF_ENDPOINTS = [
 
 function normalizeBaseUrl(u: string | undefined | null) {
   if (!u) return null
-  const s = u.trim()
-  if (!/^https?:\/\//i.test(s)) return null
-  return s.replace(/\/$/, '')
+  try {
+    const raw = u.trim()
+    const parsed = new URL(raw)
+    if (!/^https?:$/i.test(parsed.protocol)) return null
+    // Strip accidental trailing /generate from env values
+    if (/\/generate\/?$/.test(parsed.pathname)) {
+      parsed.pathname = parsed.pathname.replace(/\/generate\/?$/, '')
+    }
+    // Ensure no trailing slash on remaining path
+    parsed.pathname = parsed.pathname.replace(/\/$/, '')
+    return parsed.origin + parsed.pathname
+  } catch {
+    return null
+  }
 }
 
 async function callBackend(prompt: string, duration: number) {
@@ -36,15 +47,16 @@ async function callBackend(prompt: string, duration: number) {
       let body = ''
       try { body = await r.text() } catch {}
       const snippet = body ? body.slice(0, 500) : `<${r.headers.get('content-type') || 'unknown'}>`
-      throw new Error(`Upstream backend error ${r.status}: ${snippet}`)
+      throw new Error(`Upstream backend error ${r.status} at ${url}: ${snippet}`)
     }
     // Prefer JSON; if somehow not JSON, try parse
     const text = await r.text()
     try { return JSON.parse(text) } catch { return { raw: text } }
   } catch (e) {
     clearTimeout(timer)
-    // Swallow to allow HF fallback
-    return null
+    // Surface a normalized error for caller to include in final response if needed
+    const msg = (e as any)?.message || 'Unknown backend error'
+    return { _backendError: msg }
   }
 }
 
@@ -147,7 +159,12 @@ export async function POST(req: Request) {
 
     // Try backend first if configured
     const proxied = await callBackend(prompt, dur)
-    if (proxied && (proxied.audio_url || proxied.status)) {
+    let backendErr: string | null = null
+    if (proxied && (proxied as any)._backendError) {
+      backendErr = (proxied as any)._backendError
+    } else if (proxied && (proxied as any).audio_url) {
+      return NextResponse.json(proxied)
+    } else if (proxied && (proxied as any).status) {
       return NextResponse.json(proxied)
     }
 
@@ -157,7 +174,7 @@ export async function POST(req: Request) {
   } catch (e: any) {
     const message = e?.message || 'Generation failed'
     // Return a clear, actionable error
-    return NextResponse.json({
+    const payload: any = {
       status: 'error',
       error: 'Music generation failed',
       details: message,
@@ -166,6 +183,7 @@ export async function POST(req: Request) {
         'If using fallback, ensure HF_API_KEY is set in your server environment.',
         'First generation may take up to ~120s while the model warms.'
       ]
-    }, { status: 500 })
+    }
+    return NextResponse.json(payload, { status: 500 })
   }
 }
