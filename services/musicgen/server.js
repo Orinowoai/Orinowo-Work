@@ -172,12 +172,25 @@ async function callProvider(prompt, duration, modelVersion, { endpoint, key }, t
       const deadline = Date.now() + (timeoutMs || 60_000);
       return await pollReplicatePrediction(constructedGet, headers, deadline);
     }
-    throw new Error('No audio URL from provider');
+    const debugInfo = {
+      keys: Object.keys(data || {}),
+      id: data?.id || null,
+      status: data?.status || data?.state || null,
+      hasUrls: !!data?.urls,
+      outputType: Array.isArray(data?.output) ? 'array' : typeof data?.output,
+    };
+    throw new Error('No audio URL from provider: ' + JSON.stringify(debugInfo));
   }
 
   // Generic style: expect immediate audio URL in response
   const genericUrl = extractAudioUrl(data);
-  if (!genericUrl) throw new Error('No audio URL from provider');
+  if (!genericUrl) {
+    const debugInfo = {
+      keys: Object.keys(data || {}),
+      outputType: Array.isArray(data?.output) ? 'array' : typeof data?.output,
+    };
+    throw new Error('No audio URL from provider: ' + JSON.stringify(debugInfo));
+  }
   return genericUrl;
 }
 
