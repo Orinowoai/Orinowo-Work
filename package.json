@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "overlay:logo": "node scripts/overlay-logo.js"
+    "overlay:logo": "node scripts/overlay-logo.js",
+    "smoke": "node scripts/smoke-musicgen.js"
   },
   "dependencies": {
     "@stripe/stripe-js": "^8.0.0",
