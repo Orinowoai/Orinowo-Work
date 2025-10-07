@@ -79,23 +79,57 @@ function getModels() {
   };
 }
 
-function extractAudioUrl(data) {
-  if (!data) return null;
-  // Common shapes: array output; direct field; array field
-  if (Array.isArray(data.output) && data.output.length > 0) {
-    // Replicate often returns an array of file URLs
-    const first = data.output[0];
-    if (typeof first === 'string') return first;
-    if (first && typeof first === 'object') {
-      return first.audio_url || first.audio || first.url || null;
+function extractFirstUrl(value) {
+  const isUrl = (s) => typeof s === 'string' && /^https?:\/\//i.test(s);
+  if (!value) return null;
+  if (isUrl(value)) return value;
+  if (Array.isArray(value)) {
+    for (const v of value) {
+      const u = extractFirstUrl(v);
+      if (u) return u;
+    }
+  } else if (typeof value === 'object') {
+    for (const k of Object.keys(value)) {
+      const u = extractFirstUrl(value[k]);
+      if (u) return u;
     }
   }
-  return (
-    data.audio_url ||
-    data.audio ||
-    (Array.isArray(data.audio) && data.audio[0]) ||
-    null
-  );
+  return null;
+}
+
+function extractAudioUrl(data) {
+  if (!data) return null;
+  // Direct common fields
+  const direct = data.audio_url || data.audio;
+  if (direct) {
+    if (typeof direct === 'string') return direct;
+    if (Array.isArray(direct) && typeof direct[0] === 'string') return direct[0];
+    const url = extractFirstUrl(direct);
+    if (url) return url;
+  }
+  // Output array or object
+  if (data.output !== undefined) {
+    if (Array.isArray(data.output)) {
+      const first = data.output[0];
+      if (typeof first === 'string') return first;
+      if (first && typeof first === 'object') {
+        return (
+          first.audio_url ||
+          (typeof first.audio === 'string' ? first.audio : Array.isArray(first.audio) ? first.audio[0] : null) ||
+          first.url ||
+          extractFirstUrl(first)
+        );
+      }
+    } else if (typeof data.output === 'object') {
+      const out = data.output;
+      const url = out.url || out.audio_url || (typeof out.audio === 'string' ? out.audio : Array.isArray(out.audio) ? out.audio[0] : null) || extractFirstUrl(out);
+      if (url) return url;
+    } else if (typeof data.output === 'string') {
+      if (/^https?:\/\//i.test(data.output)) return data.output;
+    }
+  }
+  // Fallback: search whole object
+  return extractFirstUrl(data);
 }
 
 async function pollReplicatePrediction(getUrl, headers, deadlineMs) {
