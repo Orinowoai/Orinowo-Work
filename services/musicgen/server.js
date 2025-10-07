@@ -497,9 +497,18 @@ app.post('/generate', async (req, res) => {
   try {
     console.log('Request started');
     const { prompt, duration } = req.body || {};
-    const { AI_MUSIC_ENDPOINT, AI_MUSIC_KEY } = process.env;
+    const {
+      AI_MUSIC_ENDPOINT,
+      AI_MUSIC_KEY,
+      REPLICATE_API_TOKEN,
+      REPLICATE_API_BASE
+    } = process.env;
 
-    if (!AI_MUSIC_ENDPOINT || !AI_MUSIC_KEY) {
+    // Use server-side credentials only (frontend must not send any tokens)
+    const SERVICE_ENDPOINT = AI_MUSIC_ENDPOINT || REPLICATE_API_BASE || 'https://api.replicate.com/v1/predictions';
+    const SERVICE_KEY = REPLICATE_API_TOKEN || AI_MUSIC_KEY;
+
+    if (!SERVICE_ENDPOINT || !SERVICE_KEY) {
       return res.status(500).json({
         error: 'Service not configured: set AI_MUSIC_ENDPOINT and AI_MUSIC_KEY',
       });
@@ -605,7 +614,7 @@ app.post('/generate', async (req, res) => {
         // 1) Select model based on cost and fallbacks; use queue to limit concurrency
         const BASE_RATE = 0.002; // £ per second
         const estCost = (Number(duration) || 0) * BASE_RATE;
-  const { audioUrl, modelUsed } = await callProviderWithModel(englishPrompt, duration, { endpoint: AI_MUSIC_ENDPOINT, key: AI_MUSIC_KEY, estimatedCost: estCost, requestId });
+  const { audioUrl, modelUsed } = await callProviderWithModel(englishPrompt, duration, { endpoint: SERVICE_ENDPOINT, key: SERVICE_KEY, estimatedCost: estCost, requestId });
 
         // 2) Fetch generated audio bytes
         let audioResp;
