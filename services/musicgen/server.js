@@ -320,6 +320,17 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'musicgen', time: new Date().toISOString() });
 });
 
+// Non-secret config probe (masking token length and endpoint presence)
+app.get('/config-probe', (req, res) => {
+  const ep = process.env.AI_MUSIC_ENDPOINT || process.env.REPLICATE_API_BASE || 'default';
+  const token = (process.env.REPLICATE_API_TOKEN || process.env.REPLICATE_TOKEN || process.env.REPLICATE_API_KEY || process.env.AI_MUSIC_KEY || '').toString();
+  res.json({
+    endpoint: ep ? 'set' : 'missing',
+    tokenPresent: token.length > 0,
+    tokenLen: token ? token.length : 0
+  });
+});
+
 // Compatibility endpoint as requested: POST /api/musicgen
 app.post('/api/musicgen', async (req, res) => {
   try {
@@ -511,12 +522,14 @@ app.post('/generate', async (req, res) => {
       AI_MUSIC_ENDPOINT,
       AI_MUSIC_KEY,
       REPLICATE_API_TOKEN,
-      REPLICATE_API_BASE
+      REPLICATE_API_BASE,
+      REPLICATE_TOKEN,
+      REPLICATE_API_KEY
     } = process.env;
 
     // Use server-side credentials only (frontend must not send any tokens)
-    const SERVICE_ENDPOINT = AI_MUSIC_ENDPOINT || REPLICATE_API_BASE || 'https://api.replicate.com/v1/predictions';
-    const SERVICE_KEY = REPLICATE_API_TOKEN || AI_MUSIC_KEY;
+  const SERVICE_ENDPOINT = AI_MUSIC_ENDPOINT || REPLICATE_API_BASE || 'https://api.replicate.com/v1/predictions';
+  const SERVICE_KEY = (REPLICATE_API_TOKEN || REPLICATE_TOKEN || REPLICATE_API_KEY || AI_MUSIC_KEY || '').toString().trim();
 
     if (!SERVICE_ENDPOINT || !SERVICE_KEY) {
       return res.status(500).json({
