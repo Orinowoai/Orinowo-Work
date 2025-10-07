@@ -31,33 +31,65 @@ function normalizeBaseUrl(u: string | undefined | null) {
 async function callBackend(prompt: string, duration: number) {
   const base = normalizeBaseUrl(process.env.MUSICGEN_URL || process.env.NEXT_PUBLIC_MUSICGEN_URL)
   if (!base) return null
-  const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), 150000)
-  try {
-    const url = `${base}/generate`
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, duration }),
-      signal: ctrl.signal
-    })
-    clearTimeout(timer)
-    if (!r.ok) {
-      // Try to decode any upstream text/binary to readable message
-      let body = ''
-      try { body = await r.text() } catch {}
-      const snippet = body ? body.slice(0, 500) : `<${r.headers.get('content-type') || 'unknown'}>`
-      throw new Error(`Upstream backend error ${r.status} at ${url}: ${snippet}`)
+
+  const candidates = ['/generate', '/api/generate', '/v1/generate', '/musicgen/generate']
+  const payloads = [
+    { prompt, duration },
+    { text: prompt, duration },
+    { prompt }
+  ]
+
+  let lastErr: string | null = null
+  for (const path of candidates) {
+    for (const body of payloads) {
+      const ctrl = new AbortController()
+      const timer = setTimeout(() => ctrl.abort(), 150000)
+      const url = `${base}${path}`
+      try {
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'audio/mpeg, application/json;q=0.9, */*;q=0.1'
+          },
+          body: JSON.stringify(body),
+          signal: ctrl.signal
+        })
+        clearTimeout(timer)
+
+        const ct = r.headers.get('content-type') || ''
+        if (!r.ok) {
+          // Try to decode upstream to readable message
+          let text = ''
+          try { text = await r.text() } catch {}
+          const snippet = text ? text.slice(0, 500) : `<${ct || 'unknown'}>`
+          lastErr = `Upstream backend error ${r.status} at ${url}: ${snippet}`
+          // Try next payload or path on 404/400/405
+          if ([400, 404, 405].includes(r.status)) continue
+          // For other statuses, break to next path
+          break
+        }
+
+        // Handle direct audio responses
+        if (/^audio\//i.test(ct)) {
+          const buf = Buffer.from(await r.arrayBuffer())
+          const b64 = buf.toString('base64')
+          const mime = ct || 'audio/mpeg'
+          return { status: 'succeeded', audio_url: `data:${mime};base64,${b64}` }
+        }
+
+        // Prefer JSON; if somehow not JSON, try parse
+        const text = await r.text()
+        try { return JSON.parse(text) } catch { return { raw: text } }
+      } catch (e: any) {
+        clearTimeout(timer)
+        lastErr = e?.message || String(e)
+        continue
+      }
     }
-    // Prefer JSON; if somehow not JSON, try parse
-    const text = await r.text()
-    try { return JSON.parse(text) } catch { return { raw: text } }
-  } catch (e) {
-    clearTimeout(timer)
-    // Surface a normalized error for caller to include in final response if needed
-    const msg = (e as any)?.message || 'Unknown backend error'
-    return { _backendError: msg }
   }
+
+  return { _backendError: lastErr || 'Unknown backend error' }
 }
 
 async function callHF(prompt: string, duration: number) {
