@@ -79,6 +79,46 @@ function getModels() {
   };
 }
 
+function extractAudioUrl(data) {
+  if (!data) return null;
+  // Common shapes: array output; direct field; array field
+  if (Array.isArray(data.output) && data.output.length > 0) {
+    // Replicate often returns an array of file URLs
+    const first = data.output[0];
+    if (typeof first === 'string') return first;
+    if (first && typeof first === 'object') {
+      return first.audio_url || first.audio || first.url || null;
+    }
+  }
+  return (
+    data.audio_url ||
+    data.audio ||
+    (Array.isArray(data.audio) && data.audio[0]) ||
+    null
+  );
+}
+
+async function pollReplicatePrediction(getUrl, headers, deadlineMs) {
+  const pollInterval = 1500;
+  while (Date.now() < deadlineMs) {
+    const remaining = Math.max(2000, deadlineMs - Date.now());
+    const resp = await axios.get(getUrl, { headers, timeout: Math.min(10_000, remaining) });
+    const pdata = resp?.data || {};
+    const status = pdata.status || pdata.state || '';
+    if (status === 'succeeded' || status === 'completed') {
+      const url = extractAudioUrl(pdata);
+      if (!url) throw new Error('Replicate prediction succeeded but no audio URL in output');
+      return url;
+    }
+    if (status === 'failed' || status === 'canceled' || status === 'cancelled' || status === 'error') {
+      const msg = pdata.error || pdata.logs || `Prediction ${status}`;
+      throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    }
+    await sleep(pollInterval);
+  }
+  throw new Error('Timed out waiting for Replicate prediction');
+}
+
 async function callProvider(prompt, duration, modelVersion, { endpoint, key }, timeoutMs) {
   console.log(`Model chosen: ${modelVersion}`);
   const isReplicateStyle = !!process.env.AI_MUSIC_VERSION || /replicate/i.test(String(endpoint || ''));
@@ -110,19 +150,35 @@ async function callProvider(prompt, duration, modelVersion, { endpoint, key }, t
         model: modelVersion,
       };
 
-  const response = await axios.post(endpoint, payload, { headers, timeout: timeoutMs });
-  const data = response?.data || {};
+  // For Replicate-style endpoints, a POST usually returns a prediction object to poll.
+  const postResp = await axios.post(endpoint, payload, { headers, timeout: timeoutMs });
+  const data = postResp?.data || {};
 
-  // Try common shapes for audio URL
-  const audioUrl =
-    (Array.isArray(data.output) && data.output[0]) ||
-    data.audio_url ||
-    data.audio ||
-    (Array.isArray(data.audio) && data.audio[0]) ||
-    null;
+  if (isReplicateStyle) {
+    // First, try direct output (some hosted gateways may return output immediately).
+    const directUrl = extractAudioUrl(data);
+    if (directUrl) return directUrl;
+    const getUrl = (data.urls && data.urls.get) || null;
+    const id = data.id || null;
+    if (getUrl) {
+      // Respect the original timeout budget for polling
+      const deadline = Date.now() + (timeoutMs || 60_000);
+      return await pollReplicatePrediction(getUrl, headers, deadline);
+    }
+    // If no get URL but an id exists and the endpoint is the predictions root, construct a GET URL.
+    if (id && /\/v1\/predictions/i.test(String(endpoint))) {
+      const base = endpoint.replace(/\/v1\/predictions.*/, '/v1/predictions');
+      const constructedGet = `${base}/${id}`;
+      const deadline = Date.now() + (timeoutMs || 60_000);
+      return await pollReplicatePrediction(constructedGet, headers, deadline);
+    }
+    throw new Error('No audio URL from provider');
+  }
 
-  if (!audioUrl) throw new Error('No audio URL from provider');
-  return audioUrl;
+  // Generic style: expect immediate audio URL in response
+  const genericUrl = extractAudioUrl(data);
+  if (!genericUrl) throw new Error('No audio URL from provider');
+  return genericUrl;
 }
 
 async function callProviderWithModel(prompt, duration, { endpoint, key, estimatedCost }) {
