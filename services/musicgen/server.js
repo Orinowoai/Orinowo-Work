@@ -151,9 +151,9 @@ async function callProvider(prompt, duration, modelVersion, { endpoint, key }, t
       };
 
   // For Replicate-style endpoints, a POST usually returns a prediction object to poll.
-  const postResp = await axios.post(endpoint, payload, { headers, timeout: timeoutMs });
-  console.log("DEBUG full Replicate response:", JSON.stringify(postResp.data, null, 2));
-  const data = postResp?.data || {};
+  const response = await axios.post(endpoint, payload, { headers, timeout: timeoutMs });
+  console.log("DEBUG full Replicate response:", JSON.stringify(response.data, null, 2));
+  const data = response?.data || {};
 
   if (isReplicateStyle) {
     // First, try direct output (some hosted gateways may return output immediately).
