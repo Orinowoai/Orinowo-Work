@@ -31,20 +31,25 @@ export default function GeneratePage() {
     setError(null)
     
     try {
-      console.log('Request sent')
-      const resp = await fetch('/api/musicgen-proxy', {
+      // Prefer calling external backend directly from client to avoid Vercel timeouts
+      const base = process.env.NEXT_PUBLIC_MUSICGEN_URL?.replace(/\/$/, '')
+      const reqUrl = base ? `${base}/generate` : '/api/musicgen-proxy'
+      console.log('Request sent to', reqUrl)
+      const resp = await fetch(reqUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, duration }),
       })
       if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}))
+        const text = await resp.text().catch(() => '')
+        let err: any = {}
+        try { err = JSON.parse(text) } catch { err = { error: text } }
         if (err?.error?.includes('Cooldown active')) {
           setError('Please wait a moment before generating again.')
           console.warn('Cooldown active')
           return
         }
-        throw new Error(err?.error || 'Generation failed')
+        throw new Error(err?.details || err?.error || `Generation failed (${resp.status})`)
       }
       const data = await resp.json()
       // Background path
@@ -86,27 +91,27 @@ export default function GeneratePage() {
         return
       }
       // Immediate path (cache hit)
-      const url = data.audio_url || data.result || null
-      console.log('Response received', url)
-      if (!url) throw new Error('No audio URL received')
+      const audioUrl = data.audio_url || data.result || null
+      console.log('Response received', audioUrl)
+      if (!audioUrl) throw new Error('No audio URL received')
       await new Promise(r => setTimeout(r, 2000))
       console.log('Playback ready')
       try {
-        const head = await fetch(url, { method: 'HEAD' })
+        const head = await fetch(audioUrl, { method: 'HEAD' })
         if (!head.ok) throw new Error('Prefetch failed')
       } catch {
         await new Promise(r => setTimeout(r, 1000))
-        await fetch(url, { method: 'HEAD' })
+        await fetch(audioUrl, { method: 'HEAD' })
       }
-      setGeneratedTrack(url)
+      setGeneratedTrack(audioUrl)
       if (data.track_id) setTrackId(data.track_id)
 
       // Award upload credits (no UI dependency). User id is read from cookie/middleware.
       try {
         await fetch('/api/actions/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
       } catch {}
-    } catch (err) {
-      setError('Failed to generate track. Please try again.')
+    } catch (err:any) {
+      setError(err?.message || 'Failed to generate track. Please try again.')
     } finally {
       setIsGenerating(false)
     }
