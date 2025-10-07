@@ -120,7 +120,7 @@ function extractAudioUrl(data) {
           extractFirstUrl(first)
         );
       }
-    } else if (typeof data.output === 'object') {
+    } else if (data.output && typeof data.output === 'object') {
       const out = data.output;
       const url = out.url || out.audio_url || (typeof out.audio === 'string' ? out.audio : Array.isArray(out.audio) ? out.audio[0] : null) || extractFirstUrl(out);
       if (url) return url;
