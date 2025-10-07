@@ -5,15 +5,26 @@ export const runtime = 'nodejs'
 
 type Body = { prompt?: string; duration?: number }
 
-const HF_ENDPOINT = 'https://api-inference.huggingface.co/models/facebook/musicgen-small'
+const HF_ENDPOINTS = [
+  'https://api-inference.huggingface.co/models/facebook/musicgen-small',
+  'https://api-inference.huggingface.co/pipeline/text-to-audio/facebook/musicgen-small'
+]
+
+function normalizeBaseUrl(u: string | undefined | null) {
+  if (!u) return null
+  const s = u.trim()
+  if (!/^https?:\/\//i.test(s)) return null
+  return s.replace(/\/$/, '')
+}
 
 async function callBackend(prompt: string, duration: number) {
-  const base = process.env.MUSICGEN_URL || process.env.NEXT_PUBLIC_MUSICGEN_URL
+  const base = normalizeBaseUrl(process.env.MUSICGEN_URL || process.env.NEXT_PUBLIC_MUSICGEN_URL)
   if (!base) return null
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 150000)
   try {
-    const r = await fetch(`${base.replace(/\/$/, '')}/generate`, {
+    const url = `${base}/generate`
+    const r = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt, duration }),
@@ -21,10 +32,15 @@ async function callBackend(prompt: string, duration: number) {
     })
     clearTimeout(timer)
     if (!r.ok) {
-      const err = await r.text().catch(() => '')
-      throw new Error(`Backend error ${r.status}: ${err}`)
+      // Try to decode any upstream text/binary to readable message
+      let body = ''
+      try { body = await r.text() } catch {}
+      const snippet = body ? body.slice(0, 500) : `<${r.headers.get('content-type') || 'unknown'}>`
+      throw new Error(`Upstream backend error ${r.status}: ${snippet}`)
     }
-    return await r.json()
+    // Prefer JSON; if somehow not JSON, try parse
+    const text = await r.text()
+    try { return JSON.parse(text) } catch { return { raw: text } }
   } catch (e) {
     clearTimeout(timer)
     // Swallow to allow HF fallback
@@ -48,18 +64,21 @@ async function callHF(prompt: string, duration: number) {
   const started = Date.now()
   const capMs = 150000
   let attempt = 0
+  let epIndex = 0
   while (Date.now() - started < capMs) {
     attempt++
     const ctrl = new AbortController()
     const rem = Math.max(10000, capMs - (Date.now() - started))
     const timer = setTimeout(() => ctrl.abort(), rem)
     try {
-      const r = await fetch(HF_ENDPOINT, {
+      const base = HF_ENDPOINTS[Math.min(epIndex, HF_ENDPOINTS.length - 1)]
+      const url = base.includes('?') ? `${base}&wait_for_model=true` : `${base}?wait_for_model=true`
+      const r = await fetch(url, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${key}`,
           'Content-Type': 'application/json',
-          'Accept': 'audio/mpeg'
+          'Accept': 'audio/mpeg, audio/wav;q=0.9, application/json;q=0.8, */*;q=0.1'
         },
         body: JSON.stringify(body),
         signal: ctrl.signal
@@ -82,6 +101,14 @@ async function callHF(prompt: string, duration: number) {
       if (r.status === 401) {
         throw new Error(`Unauthorized (401): ${text}`)
       }
+      if (r.status === 404) {
+        // Try alternate endpoint once
+        if (epIndex < HF_ENDPOINTS.length - 1) {
+          epIndex++
+          continue
+        }
+        throw new Error(`Not Found (404) from HF endpoint: ${text || 'Not Found'}`)
+      }
 
       // Model loading or rate limit
       if (r.status === 503 || r.status === 429 || json?.estimated_time) {
@@ -96,7 +123,7 @@ async function callHF(prompt: string, duration: number) {
         return { status: 'succeeded', audio_url: `data:audio/mp3;base64,${b64}` }
       }
 
-      throw new Error(`Unexpected HF response (${r.status}): ${text.slice(0, 300)}`)
+      throw new Error(`Unexpected HF response (${r.status}): ${(text || '').slice(0, 500)}`)
     } catch (e: any) {
       clearTimeout(timer)
       // Retry on transient network or continue loop
@@ -129,6 +156,16 @@ export async function POST(req: Request) {
     return NextResponse.json(result)
   } catch (e: any) {
     const message = e?.message || 'Generation failed'
-    return NextResponse.json({ status: 'error', error: 'Music generation failed', details: message }, { status: 500 })
+    // Return a clear, actionable error
+    return NextResponse.json({
+      status: 'error',
+      error: 'Music generation failed',
+      details: message,
+      hints: [
+        'Verify NEXT_PUBLIC_MUSICGEN_URL points to your Render backend (https, no trailing slash).',
+        'If using fallback, ensure HF_API_KEY is set in your server environment.',
+        'First generation may take up to ~120s while the model warms.'
+      ]
+    }, { status: 500 })
   }
 }
