@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Orinowo MusicGen</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; color: #111; }
+    .card { max-width: 720px; margin: 0 auto; padding: 1.25rem 1.5rem; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+    label { display: block; font-weight: 600; margin: 0.75rem 0 0.25rem; }
+    input, button { font-size: 1rem; }
+    input[type="text"], input[type="number"] { width: 100%; padding: 0.6rem 0.75rem; border: 1px solid #d1d5db; border-radius: 8px; }
+    button { margin-top: 1rem; padding: 0.7rem 1rem; background: #111827; color: #fff; border: 0; border-radius: 8px; cursor: pointer; }
+    button[disabled] { opacity: .7; cursor: not-allowed; }
+    .status { margin-top: 1rem; padding: 0.75rem; border-radius: 8px; background: #f3f4f6; }
+    .status.error { background: #fef2f2; color: #991b1b; }
+    .row { display: flex; gap: 1rem; }
+    .row > div { flex: 1; }
+    audio { width: 100%; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Orinowo MusicGen</h1>
+    <p>Describe your idea, choose a duration, and click Generate. This page talks to the Orinowo backend to create and fetch music.</p>
+
+    <label for="prompt">Prompt</label>
+    <input id="prompt" type="text" placeholder="Describe your music idea…" value="global cinematic soundscape with ambient textures" />
+
+    <div class="row">
+      <div>
+        <label for="duration">Duration (seconds)</label>
+        <input id="duration" type="number" min="5" max="60" value="15" />
+      </div>
+    </div>
+
+    <button id="generate">Generate Music</button>
+
+    <div id="status" class="status" aria-live="polite">Idle</div>
+
+    <audio id="player" controls></audio>
+  </div>
+
+  <script>
+    const baseUrl = 'https://orinowo-work.onrender.com';
+    const $ = (id) => document.getElementById(id);
+    const statusEl = $('status');
+    const player = $('player');
+
+    function setStatus(text, isError = false) {
+      statusEl.textContent = text;
+      statusEl.classList.toggle('error', !!isError);
+    }
+
+    async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    async function pollStatus(id, maxMs = 150000) {
+      const start = Date.now();
+      while (Date.now() - start < maxMs) {
+        const r = await fetch(`${baseUrl}/status/${encodeURIComponent(id)}`);
+        const data = await r.json();
+        if (data.status !== 'processing') return data;
+        setStatus('processing…');
+        await sleep(5000);
+      }
+      return { status: 'timeout' };
+    }
+
+    $('generate').addEventListener('click', async () => {
+      const prompt = $('prompt').value.trim();
+      const duration = parseInt($('duration').value, 10) || 15;
+      player.src = '';
+
+      if (!prompt) { setStatus('Please enter a prompt.', true); return; }
+
+      setStatus('Starting…');
+      $('generate').disabled = true;
+      try {
+        const resp = await fetch(`${baseUrl}/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt, duration })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data?.error || 'Failed to start');
+        const id = data.request_id;
+        if (!id) throw new Error('No request_id returned');
+
+        setStatus('processing…');
+        const final = await pollStatus(id);
+        if (final.status === 'done' || final.status === 'succeeded') {
+          if (final.audio_url) {
+            setStatus('done');
+            player.src = final.audio_url;
+            try { await player.play(); } catch {}
+          } else {
+            setStatus('done but no audio_url in response.', true);
+            console.warn('Final status missing audio_url:', final);
+          }
+        } else if (final.status === 'timeout') {
+          setStatus('Timed out after waiting. Try again.', true);
+        } else {
+          setStatus(`error: ${final.error || final.status}`, true);
+        }
+      } catch (e) {
+        setStatus(`error: ${e.message}`, true);
+      } finally {
+        $('generate').disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

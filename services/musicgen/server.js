@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const path = require('path');
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 let translate;
@@ -26,6 +27,15 @@ try { require('../reporting/scheduler.js'); } catch (e) { console.warn('Reportin
 // In-memory cooldowns and background jobs (ephemeral)
 const cooldowns = new Map(); // key: user_ip, value: timestamp (ms)
 const jobs = new Map(); // key: request_id, value: { status, audio_url?, track_id?, error?, model_used?, model_label? }
+
+// Serve static assets (frontend UI) from repository /public
+try {
+  const staticDir = path.join(__dirname, '../../public');
+  app.use(express.static(staticDir));
+  console.log('Static UI served from', staticDir);
+} catch (e) {
+  console.warn('Static UI not served:', e?.message || e);
+}
 
 // Semaphore queue to limit concurrent provider calls
 const MAX_CONCURRENT = 2;
