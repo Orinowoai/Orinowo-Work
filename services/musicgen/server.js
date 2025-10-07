@@ -39,8 +39,11 @@ app.post('/generate', async (req, res) => {
       return res.status(500).json({ error: 'HF_API_KEY not configured on server' });
     }
 
-    // Use explicit MusicGen model endpoint
-    const endpoint = 'https://api-inference.huggingface.co/models/facebook/musicgen-small';
+    // Try primary endpoint, then an alternate pipeline route if we see 404/Not Found
+    const endpoints = [
+      (process.env.HF_MODEL_ENDPOINT || 'https://api-inference.huggingface.co/models/facebook/musicgen-small'),
+      'https://api-inference.huggingface.co/pipeline/text-to-audio/facebook/musicgen-small'
+    ].map(u => u.includes('?') ? `${u}&wait_for_model=true` : `${u}?wait_for_model=true`);
 
     // HF simple request body (minimal expected format)
     // We keep duration client-side only; HF will decide length/model-specific behavior
@@ -52,16 +55,19 @@ app.post('/generate', async (req, res) => {
     let attempt = 0;
     let lastErr = null;
 
+    let epIndex = 0;
     while (Date.now() - start < maxTimeMs) {
       attempt++;
       try {
         const remaining = Math.max(10_000, maxTimeMs - (Date.now() - start));
-        console.log(`[HF] Attempt ${attempt}: POST ${endpoint} (timeout ${remaining}ms)`);
-        const response = await axios.post(endpoint, body, {
+        const url = endpoints[Math.min(epIndex, endpoints.length - 1)];
+        console.log(`[HF] Attempt ${attempt}: POST ${url} (timeout ${remaining}ms)`);
+        const response = await axios.post(url, body, {
           headers: {
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
-            'Accept': 'audio/mpeg'
+            // Allow server to choose best audio; accept json fallback
+            'Accept': 'audio/mpeg, audio/wav;q=0.9, application/json;q=0.8, */*;q=0.1'
           },
           responseType: 'arraybuffer',
           timeout: remaining
@@ -106,6 +112,15 @@ app.post('/generate', async (req, res) => {
         if (status === 401) {
           const detail = (() => { try { return JSON.stringify(e?.response?.data); } catch { return 'Unauthorized'; } })();
           return res.status(401).json({ status: 'error', error: 'Unauthorized: check HF_API_KEY', details: detail });
+        }
+        if (status === 404) {
+          const text = (() => { try { return Buffer.from(e?.response?.data || '').toString('utf8'); } catch { return ''; } })();
+          console.warn(`[HF] 404 Not Found on endpoint index ${epIndex}. Body: ${text.slice(0,200)}`);
+          // Try next endpoint if available
+          if (epIndex < endpoints.length - 1) {
+            epIndex++;
+            continue;
+          }
         }
         if (status === 403) {
           const detail = (() => { try { return JSON.stringify(e?.response?.data); } catch { return 'Forbidden'; } })();
