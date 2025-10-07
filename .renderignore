@@ -1,0 +1,10 @@
+# .renderignore
+# Ignore Next.js frontend files for Render backend deployment
+app/
+public/
+next.config.mjs
+postcss.config.mjs
+tailwind.config.ts
+tsconfig.json
+next-env.d.ts
+README.md
