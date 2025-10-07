@@ -169,8 +169,25 @@ export async function POST(req: Request) {
     }
 
     // Fallback to direct HF call
-    const result = await callHF(prompt, dur)
-    return NextResponse.json(result)
+    try {
+      const result = await callHF(prompt, dur)
+      return NextResponse.json(result)
+    } catch (hfErr: any) {
+      // If backendErr exists and HF failed, surface both for clarity
+      const details = hfErr?.message || String(hfErr)
+      const payload: any = {
+        status: 'error',
+        error: 'Music generation failed',
+        details,
+        upstream: backendErr || undefined,
+        hints: [
+          'Verify NEXT_PUBLIC_MUSICGEN_URL points to your Render backend (https, no trailing slash).',
+          'If using fallback, ensure HF_API_KEY is set in your server environment.',
+          'First generation may take up to ~120s while the model warms.'
+        ]
+      }
+      return NextResponse.json(payload, { status: 502 })
+    }
   } catch (e: any) {
     const message = e?.message || 'Generation failed'
     // Return a clear, actionable error

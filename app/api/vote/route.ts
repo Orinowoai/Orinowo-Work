@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
       .select()
 
     if (error) {
-      console.error('Supabase error:', error)
+      if (error) console.error('Supabase error:', error)
       return NextResponse.json(
         { error: 'Failed to record vote' },
         { status: 500 }

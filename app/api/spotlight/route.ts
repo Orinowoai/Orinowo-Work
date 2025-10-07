@@ -19,7 +19,7 @@ export async function GET() {
       .eq('active', true)
 
     if (error || !data || data.length === 0) {
-      console.error('Supabase error:', error)
+      if (error) console.error('Supabase error:', error)
       
       // Return fallback data
       return NextResponse.json({
