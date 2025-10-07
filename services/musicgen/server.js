@@ -51,6 +51,15 @@ app.post('/generate', async (req, res) => {
   }
 });
 
+// Simple environment check for Hugging Face API Key
+app.get('/env-check', (req, res) => {
+  const hfKey = process.env.HF_API_KEY ? ' Loaded' : ' Missing or undefined';
+  res.json({
+    HF_API_KEY: hfKey,
+    Service: 'Orinowo MusicGen ready'
+  });
+});
+
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(' Orinowo MusicGen running on port ' + PORT);
