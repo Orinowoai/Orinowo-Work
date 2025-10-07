@@ -163,14 +163,14 @@ async function callProvider(prompt, duration, modelVersion, { endpoint, key }, t
     const id = data.id || null;
     if (getUrl) {
       // Respect the original timeout budget for polling
-      const deadline = Date.now() + (timeoutMs || 60_000);
+      const deadline = Date.now() + (timeoutMs || 150_000);
       return await pollReplicatePrediction(getUrl, headers, deadline);
     }
     // If no get URL but an id exists and the endpoint is the predictions root, construct a GET URL.
     if (id && /\/v1\/predictions/i.test(String(endpoint))) {
       const base = endpoint.replace(/\/v1\/predictions.*/, '/v1/predictions');
       const constructedGet = `${base}/${id}`;
-      const deadline = Date.now() + (timeoutMs || 60_000);
+      const deadline = Date.now() + (timeoutMs || 150_000);
       return await pollReplicatePrediction(constructedGet, headers, deadline);
     }
     const debugInfo = {
@@ -200,17 +200,17 @@ async function callProviderWithModel(prompt, duration, { endpoint, key, estimate
   const MAX_COST = parseFloat(process.env.MAX_COST_PER_GEN || '0') || Number.POSITIVE_INFINITY;
   let selected = estimatedCost > MAX_COST ? fast : primary;
   try {
-    const audioUrl = await enqueue(() => callProvider(prompt, duration, selected, { endpoint, key }, selected === primary ? 45_000 : 60_000));
+  const audioUrl = await enqueue(() => callProvider(prompt, duration, selected, { endpoint, key }, selected === primary ? 120_000 : 150_000));
     return { audioUrl, modelUsed: selected };
   } catch (e) {
     const isTimeout = (e?.code === 'ECONNABORTED') || /timeout/i.test(String(e?.message || ''));
     if (selected === primary && isTimeout) {
       try {
-        const audioUrl = await enqueue(() => callProvider(prompt, duration, fast, { endpoint, key }, 60_000));
+  const audioUrl = await enqueue(() => callProvider(prompt, duration, fast, { endpoint, key }, 150_000));
         return { audioUrl, modelUsed: fast };
       } catch (e2) {
         console.warn('Fallback used');
-        const audioUrl = await enqueue(() => callProvider(prompt, duration, fallback, { endpoint, key }, 60_000));
+  const audioUrl = await enqueue(() => callProvider(prompt, duration, fallback, { endpoint, key }, 150_000));
         return { audioUrl, modelUsed: fallback };
       }
     } else {
@@ -425,7 +425,7 @@ app.post('/generate', async (req, res) => {
         // 2) Fetch generated audio bytes
         let audioResp;
         try {
-          audioResp = await axios.get(audioUrl, { responseType: 'arraybuffer', timeout: 60000 });
+          audioResp = await axios.get(audioUrl, { responseType: 'arraybuffer', timeout: 120000 });
         } catch (e) {
           throw new Error(e?.message || 'Failed to download generated audio');
         }
