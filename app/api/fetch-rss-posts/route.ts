@@ -3,11 +3,9 @@ import { NextResponse } from 'next/server'
 import { getServiceSupabase } from '@/lib/supabase'
 
 const RSS_FEEDS = [
-  'https://musictech.net/feed/',
-  'https://www.soundonsound.com/rss',
-  'https://www.gearnews.com/feed/',
   'https://cdm.link/feed/',
-  'https://www.musicradar.com/rss',
+  'https://www.attackmagazine.com/feed/',
+  'https://www.musicradar.com/news/feed',
 ]
 
 const parser = new Parser()
@@ -18,36 +16,43 @@ export async function GET() {
     const newPosts: any[] = []
 
     for (const feedUrl of RSS_FEEDS) {
-      const feed = await parser.parseURL(feedUrl)
-      for (const item of (feed.items || []).slice(0, 3)) {
-        const link = item.link || ''
-        if (!link) continue
+      try {
+        console.log(`Fetching: ${feedUrl}`)
+        const feed = await parser.parseURL(feedUrl)
+        for (const item of (feed.items || []).slice(0, 3)) {
+          const link = item.link || ''
+          if (!link) continue
 
-        const { data: existing } = await supabase
-          .from('blog_posts')
-          .select('id')
-          .eq('source_url', link)
-          .maybeSingle?.() ?? { data: null }
+          const { data: existing } = await supabase
+            .from('blog_posts')
+            .select('id')
+            .eq('source_url', link)
+            .maybeSingle?.() ?? { data: null }
 
-        if (!existing) {
-          const rawTitle = item.title || 'Untitled'
-          const slugBase = rawTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'untitled'
-          const imageMatch = (item.content || '').match(/<img[^>]+src="([^"]+)"/)
-          const image = imageMatch ? imageMatch[1] : '/blog/placeholder.jpg'
+          if (!existing) {
+            const rawTitle = item.title || 'Untitled'
+            const slugBase = rawTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'untitled'
+            const imageMatch = (item.content || '').match(/<img[^>]+src="([^"]+)"/)
+            const image = imageMatch ? imageMatch[1] : '/blog/placeholder.jpg'
 
-          newPosts.push({
-            title: rawTitle,
-            slug: `${slugBase}-${Date.now()}`,
-            excerpt: (item.contentSnippet || '').slice(0, 200),
-            content: item.content || item.contentSnippet || '',
-            image_url: image,
-            category: 'Industry News',
-            published: true,
-            source_url: link,
-            source_name: feed.title || 'Music Tech News',
-            created_at: item.pubDate || new Date().toISOString(),
-          })
+            newPosts.push({
+              title: rawTitle,
+              slug: `${slugBase}-${Date.now()}`,
+              excerpt: (item.contentSnippet || '').slice(0, 200),
+              content: item.content || item.contentSnippet || '',
+              image_url: image,
+              category: 'Industry News',
+              published: true,
+              source_url: link,
+              source_name: feed.title || 'Music Tech News',
+              created_at: item.pubDate || new Date().toISOString(),
+            })
+          }
         }
+      } catch (error: any) {
+        console.error(`Failed to fetch ${feedUrl}:`, error?.message || String(error))
+        // Continue to next feed instead of crashing
+        continue
       }
     }
 
