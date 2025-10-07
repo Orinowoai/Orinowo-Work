@@ -187,3 +187,26 @@ export async function POST(req: Request) {
     return NextResponse.json(payload, { status: 500 })
   }
 }
+
+// Helpful GET for humans hitting the endpoint in a browser
+export async function GET() {
+  const backend = normalizeBaseUrl(process.env.MUSICGEN_URL || process.env.NEXT_PUBLIC_MUSICGEN_URL)
+  const hfConfigured = !!(process.env.HF_API_KEY || '').trim()
+  const body = {
+    status: 'ok',
+    endpoint: '/api/musicgen-proxy',
+    usage: {
+      method: 'POST',
+      contentType: 'application/json',
+      body: { prompt: 'text', duration: 15 }
+    },
+    backend,
+    hfConfigured
+  }
+  return NextResponse.json(body, { headers: { 'Allow': 'POST, GET, OPTIONS' } })
+}
+
+// Preflight support
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: { 'Allow': 'POST, GET, OPTIONS' } })
+}
