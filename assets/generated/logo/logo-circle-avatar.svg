@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Smiling buddha baby avatar">
+  <defs>
+    <linearGradient id="av" x1="0" x2="1">
+      <stop offset="0" stop-color="#FFF6EB"/>
+      <stop offset="1" stop-color="#FFF1DD"/>
+    </linearGradient>
+  </defs>
+  <circle cx="256" cy="256" r="256" fill="url(#av)"/>
+  <circle cx="256" cy="226" r="160" fill="#FFD96B" stroke="#E6B24A" stroke-width="6"/>
+  <g fill="#3B3B3B">
+    <ellipse cx="216" cy="206" rx="16" ry="22"/>
+    <ellipse cx="296" cy="206" rx="16" ry="22"/>
+  </g>
+  <path d="M208 276 C240 320, 312 320, 344 276" fill="none" stroke="#3B3B3B" stroke-width="12" stroke-linecap="round"/>
+  <g stroke="#B9871F" stroke-width="12" fill="#FFD64D" stroke-linecap="round">
+    <ellipse cx="110" cy="226" rx="30" ry="36" />
+    <ellipse cx="402" cy="226" rx="30" ry="36" />
+    <path d="M80 156 C140 96, 372 96, 432 156" stroke="#F4C84B" stroke-width="20" fill="none"/>
+  </g>
+</svg>

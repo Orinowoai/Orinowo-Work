@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Smiling buddha baby logo">
+  <defs>
+    <linearGradient id="g1" x1="0" x2="1">
+      <stop offset="0" stop-color="#FFD166"/>
+      <stop offset="1" stop-color="#FFC857"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="0" x2="1">
+      <stop offset="0" stop-color="#FFD96B"/>
+      <stop offset="1" stop-color="#FFB84D"/>
+    </linearGradient>
+  </defs>
+  <rect width="100%" height="100%" fill="transparent"/>
+  <!-- Background softly rounded square -->
+  <rect x="64" y="64" width="896" height="896" rx="160" fill="#FFF6EB"/>
+  <!-- Head -->
+  <circle cx="512" cy="420" r="280" fill="url(#g1)" stroke="#E6B24A" stroke-width="6"/>
+  <!-- Face shading -->
+  <ellipse cx="512" cy="480" rx="220" ry="160" fill="rgba(255,255,255,0.12)"/>
+  <!-- Eyes -->
+  <g fill="#3B3B3B">
+    <ellipse cx="420" cy="400" rx="28" ry="40"/>
+    <ellipse cx="604" cy="400" rx="28" ry="40"/>
+    <circle cx="418" cy="392" r="8" fill="#FFFFFF"/>
+    <circle cx="602" cy="392" r="8" fill="#FFFFFF"/>
+  </g>
+  <!-- Smile -->
+  <path d="M380 520 C430 590, 594 590, 644 520" fill="none" stroke="#3B3B3B" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Cheeks -->
+  <circle cx="360" cy="480" r="40" fill="#FFB6A3" opacity="0.9"/>
+  <circle cx="664" cy="480" r="40" fill="#FFB6A3" opacity="0.9"/>
+  <!-- Little topknot / buddha tuft -->
+  <path d="M512 160 C480 220, 544 240, 520 300 C548 240, 584 210, 548 168 C532 150, 516 150, 512 160 Z" fill="#FFCF7A" stroke="#E6B24A" stroke-width="3"/>
+  <!-- Headphones (gold) -->
+  <g stroke="#B9871F" stroke-linecap="round" stroke-linejoin="round" stroke-width="18" fill="#FFD64D">
+    <!-- left cup -->
+    <ellipse cx="260" cy="420" rx="68" ry="84" fill="#FFD64D" stroke="#B9871F" stroke-width="10"/>
+    <!-- right cup -->
+    <ellipse cx="764" cy="420" rx="68" ry="84" fill="#FFD64D" stroke="#B9871F" stroke-width="10"/>
+    <!-- band -->
+    <path d="M200 300 C270 170, 754 170, 824 300" stroke="#F4C84B" stroke-width="36" fill="none" stroke-linecap="round"/>
+  </g>
+  <!-- Outline for contrast -->
+  <circle cx="512" cy="420" r="280" fill="none" stroke="#E0A63C" stroke-width="6"/>
+  <!-- Small transparent app-icon crop hint (not visible) -->
+</svg>
