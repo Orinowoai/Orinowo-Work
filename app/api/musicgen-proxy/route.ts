@@ -6,8 +6,8 @@ export const runtime = 'nodejs'
 type Body = { prompt?: string; duration?: number }
 
 const HF_ENDPOINTS = [
-  'https://api-inference.huggingface.co/models/facebook/musicgen-small',
-  'https://api-inference.huggingface.co/pipeline/text-to-audio/facebook/musicgen-small'
+  'https://router.huggingface.co/hf-inference/models/facebook/musicgen-small',
+  'https://router.huggingface.co/hf-inference/pipeline/text-to-audio/facebook/musicgen-small'
 ]
 
 function normalizeBaseUrl(u: string | undefined | null) {
