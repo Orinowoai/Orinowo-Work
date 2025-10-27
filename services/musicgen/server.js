@@ -41,8 +41,8 @@ app.post('/generate', async (req, res) => {
 
     // Try primary endpoint, then an alternate pipeline route if we see 404/Not Found
     const endpoints = [
-      (process.env.HF_MODEL_ENDPOINT || 'https://api-inference.huggingface.co/models/facebook/musicgen-small'),
-      'https://api-inference.huggingface.co/pipeline/text-to-audio/facebook/musicgen-small'
+      (process.env.HF_MODEL_ENDPOINT || 'https://router.huggingface.co/hf-inference/models/facebook/musicgen-small'),
+      'https://router.huggingface.co/hf-inference/pipeline/text-to-audio/facebook/musicgen-small'
     ].map(u => u.includes('?') ? `${u}&wait_for_model=true` : `${u}?wait_for_model=true`);
 
     // HF simple request body (minimal expected format)
