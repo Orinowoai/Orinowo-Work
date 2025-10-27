@@ -6,11 +6,11 @@ export function middleware(req: NextRequest) {
   let userId = req.cookies.get(cookieName)?.value
   if (!userId) {
     userId = crypto.randomUUID()
-  res.cookies.set(cookieName, userId, { path: '/', httpOnly: false, sameSite: 'lax', maxAge: 60 * 60 * 24 * 365 })
+    res.cookies.set(cookieName, userId, { path: '/', httpOnly: false, sameSite: 'lax', maxAge: 60 * 60 * 24 * 365 })
   }
   return res
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 }

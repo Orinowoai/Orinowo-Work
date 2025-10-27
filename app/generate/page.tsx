@@ -29,132 +29,40 @@ export default function GeneratePage() {
 
     setIsGenerating(true)
     setError(null)
-    
     try {
-      // 1) Try external backend first (multiple paths/payloads) to avoid Vercel timeouts
-      const base = process.env.NEXT_PUBLIC_MUSICGEN_URL?.replace(/\/$/, '')
-      const tryClientBackend = async (): Promise<any | null> => {
-        if (!base) return null
-        const candidates = ['/generate', '/api/generate', '/v1/generate', '/musicgen/generate']
-        const payloads: any[] = [
-          { prompt, duration },
-          { text: prompt, duration },
-          { prompt }
-        ]
-        let lastErr: string | null = null
-        for (const path of candidates) {
-          for (const body of payloads) {
-            const url = `${base}${path}`
-            try {
-              const r = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'audio/mpeg, application/json;q=0.9, */*;q=0.1' },
-                body: JSON.stringify(body)
-              })
-              const ct = r.headers.get('content-type') || ''
-              if (!r.ok) {
-                let text = ''
-                try { text = await r.text() } catch {}
-                if ([400,404,405].includes(r.status)) { lastErr = `Backend ${r.status} ${path}: ${text.slice(0,200)}`; continue }
-                lastErr = `Backend ${r.status} ${path}: ${text.slice(0,200)}`
-                break
-              }
-              // Direct audio response
-              if (/^audio\//i.test(ct)) {
-                const blob = await r.blob()
-                const objUrl = URL.createObjectURL(blob)
-                return { status: 'succeeded', audio_url: objUrl }
-              }
-              // JSON response
-              const text = await r.text()
-              try { return JSON.parse(text) } catch { return { raw: text } }
-            } catch (e: any) {
-              lastErr = e?.message || String(e)
-              continue
-            }
-          }
-        }
-        console.warn('Client backend attempts failed:', lastErr)
-        return null
-      }
-
-      const clientResult = await tryClientBackend()
-      const data = clientResult ?? await (async () => {
-        // 2) Fallback to server proxy (handles HF as ultimate fallback)
-        const resp = await fetch('/api/musicgen-proxy', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, duration })
+      const resp = await fetch('/api/musicgen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, duration })
+      })
+      if (resp.ok) {
+        // Expect audio bytes
+        const blob = await resp.blob()
+        const url = URL.createObjectURL(blob)
+        setGeneratedTrack(url)
+        // Optional: award upload credits
+        try { await fetch('/api/actions/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }) } catch {}
+      } else {
+        // Fallback to JSON proxy if POST /api/musicgen is not available (404/405)
+        const proxy = await fetch('/api/musicgen-proxy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt, duration })
         })
-        if (!resp.ok) {
-          const text = await resp.text().catch(() => '')
-          let err: any = {}
-          try { err = JSON.parse(text) } catch { err = { error: text } }
-          if (err?.error?.includes('Cooldown active')) {
-            setError('Please wait a moment before generating again.')
-            return null
-          }
-          throw new Error(err?.details || err?.error || `Generation failed (${resp.status})`)
+        if (!proxy.ok) {
+          const err = await proxy.json().catch(() => ({} as any))
+          throw new Error(err?.error || `Generation failed (${proxy.status})`)
         }
-        return resp.json()
-      })()
-      if (!data) return
-      // Background path
-      if (data?.status === 'processing' && data?.request_id) {
-        setRequestId(data.request_id)
-        console.log('Background started')
-        // Poll every 3s
-        const poll = async () => {
-          if (!data.request_id) return
-          try {
-            const s = await fetch(`/api/musicgen-status?id=${encodeURIComponent(data.request_id)}`)
-            const json = await s.json()
-            if (json?.status === 'done' && json?.audio_url) {
-              console.log('Response received', json.audio_url)
-              await new Promise(r => setTimeout(r, 2000))
-              console.log('Playback ready')
-              try {
-                const head = await fetch(json.audio_url, { method: 'HEAD' })
-                if (!head.ok) throw new Error('Prefetch failed')
-              } catch {
-                await new Promise(r => setTimeout(r, 1000))
-                await fetch(json.audio_url, { method: 'HEAD' })
-              }
-              setGeneratedTrack(json.audio_url)
-              if (json.track_id) setTrackId(json.track_id)
-              setRequestId(null)
-              return
-            } else if (json?.status === 'error') {
-              setError('Generation failed. Please try again.')
-              setRequestId(null)
-              return
-            }
-          } catch (e) {
-            // keep polling quietly
-          }
-          setTimeout(poll, 3000)
+        const json = await proxy.json().catch(() => ({} as any))
+        if (json?.audio_url) {
+          setGeneratedTrack(json.audio_url)
+          try { await fetch('/api/actions/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }) } catch {}
+        } else if (json?.status && json?.error) {
+          throw new Error(json.error)
+        } else {
+          throw new Error('Generation failed: unexpected response')
         }
-        setTimeout(poll, 3000)
-        return
       }
-      // Immediate path (cache hit)
-  const audioUrl = data.audio_url || data.result || null
-      console.log('Response received', audioUrl)
-      if (!audioUrl) throw new Error('No audio URL received')
-      await new Promise(r => setTimeout(r, 2000))
-      console.log('Playback ready')
-      try {
-        const head = await fetch(audioUrl, { method: 'HEAD' })
-        if (!head.ok) throw new Error('Prefetch failed')
-      } catch {
-        await new Promise(r => setTimeout(r, 1000))
-        await fetch(audioUrl, { method: 'HEAD' })
-      }
-      setGeneratedTrack(audioUrl)
-      if (data.track_id) setTrackId(data.track_id)
-
-      // Award upload credits (no UI dependency). User id is read from cookie/middleware.
-      try {
-        await fetch('/api/actions/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
-      } catch {}
     } catch (err:any) {
       setError(err?.message || 'Failed to generate track. Please try again.')
     } finally {

@@ -93,7 +93,7 @@ async function callBackend(prompt: string, duration: number) {
 }
 
 async function callHF(prompt: string, duration: number) {
-  const key = (process.env.HF_API_KEY || '').trim()
+  const key = ((process.env.HF_API_KEY || process.env.HF_TOKEN) || '').trim()
   if (!key) throw new Error('HF_API_KEY not configured on server')
 
   const seconds = Number.isFinite(Number(duration)) ? Math.max(1, Math.min(60, Math.floor(Number(duration)))) : 15

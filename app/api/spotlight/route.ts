@@ -1,10 +1,38 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
     // Get current month's spotlight items; if table missing or empty, return fallback
     const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM format
+
+    // Lazily create Supabase client only when env vars are present
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return NextResponse.json({
+        artists: [
+          { id: '1', title: 'Luna Rodriguez', type: 'artist', image: '/spotlight/artist-1.jpg', votes: 234 },
+          { id: '2', title: 'Marcus Chen', type: 'artist', image: '/spotlight/artist-2.jpg', votes: 187 },
+          { id: '3', title: 'Aria Thompson', type: 'artist', image: '/spotlight/artist-3.jpg', votes: 156 }
+        ],
+        songs: [
+          { id: '4', title: 'Neon Dreams', type: 'song', image: '/spotlight/song-1.jpg', votes: 345 },
+          { id: '5', title: 'Digital Sunrise', type: 'song', image: '/spotlight/song-2.jpg', votes: 298 },
+          { id: '6', title: 'Electric Pulse', type: 'song', image: '/spotlight/song-3.jpg', votes: 276 }
+        ],
+        producers: [
+          { id: '7', title: 'TechBeats Pro', type: 'producer', image: '/spotlight/producer-1.jpg', votes: 456 },
+          { id: '8', title: 'SoundCraft Studio', type: 'producer', image: '/spotlight/producer-2.jpg', votes: 387 },
+          { id: '9', title: 'AudioWave Labs', type: 'producer', image: '/spotlight/producer-3.jpg', votes: 298 }
+        ]
+      })
+    }
+
+    const { createClient } = await import('@supabase/supabase-js')
+    const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
     const { data, error } = await supabase
       .from('spotlight')
