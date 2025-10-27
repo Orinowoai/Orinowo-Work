@@ -29,7 +29,7 @@ app.get('/', (req, res) => {
   res.send('Orinowo MusicGen (HF) is live');
 });
 
-// Hugging Face MusicGen: return audio data URL (mp3)
+// Hugging Face MusicGen: return audio data (raw binary)
 app.post('/generate', async (req, res) => {
   const { prompt, duration } = req.body || {};
   if (!prompt) return res.status(400).json({ error: 'Missing required field: prompt' });
@@ -39,120 +39,67 @@ app.post('/generate', async (req, res) => {
       return res.status(500).json({ error: 'HF_API_KEY not configured on server' });
     }
 
-    // Try primary endpoint, then an alternate pipeline route if we see 404/Not Found
-    const endpoints = [
-      (process.env.HF_MODEL_ENDPOINT || 'https://router.huggingface.co/hf-inference/models/facebook/musicgen-small'),
-      'https://router.huggingface.co/hf-inference/pipeline/text-to-audio/facebook/musicgen-small'
-    ].map(u => u.includes('?') ? `${u}&wait_for_model=true` : `${u}?wait_for_model=true`);
+    // Single, explicit router endpoint for MusicGen
+    const url = 'https://router.huggingface.co/hf-inference/models/facebook/musicgen-small';
+    const body = { inputs: prompt || 'uplifting cinematic music' };
 
-    // HF simple request body (minimal expected format)
-    // We keep duration client-side only; HF will decide length/model-specific behavior
-    const body = { inputs: prompt };
+    try {
+      const response = await axios.post(url, body, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        responseType: 'arraybuffer',
+        timeout: 150000,
+      });
 
-    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-    const maxTimeMs = 150000; // 150s cap
-    const start = Date.now();
-    let attempt = 0;
-    let lastErr = null;
-
-    let epIndex = 0;
-    while (Date.now() - start < maxTimeMs) {
-      attempt++;
+      // Attempt to detect whether HF returned raw audio or a JSON wrapper
+      let audioData = response.data;
       try {
-        const remaining = Math.max(10_000, maxTimeMs - (Date.now() - start));
-        const url = endpoints[Math.min(epIndex, endpoints.length - 1)];
-        console.log(`[HF] Attempt ${attempt}: POST ${url} (timeout ${remaining}ms)`);
-        const response = await axios.post(url, body, {
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-            // Allow server to choose best audio; accept json fallback
-            'Accept': 'audio/mpeg, audio/wav;q=0.9, application/json;q=0.8, */*;q=0.1'
-          },
-          responseType: 'arraybuffer',
-          timeout: remaining
-        });
-
-        const ct = (response.headers && response.headers['content-type']) || '';
-        console.log(`[HF] Response attempt ${attempt}: status ${response.status}, content-type ${ct}`);
-        // If audio is returned as binary
-        if (/audio\//i.test(ct)) {
-          const audioBase64 = Buffer.from(response.data).toString('base64');
-          const mime = /audio\/(\w+)/i.test(ct) ? ct : 'audio/mp3';
-          const audioUrl = `data:${mime};base64,${audioBase64}`;
-          return res.json({ status: 'succeeded', audio_url: audioUrl });
+        const text = Buffer.from(audioData).toString('utf8');
+        if (text && (text.trim().startsWith('{') || text.trim().startsWith('['))) {
+          const parsed = JSON.parse(text);
+          // Newer HF router responses sometimes wrap blobs in parsed.data[0].blob
+          if (parsed?.data?.[0]?.blob) {
+            audioData = Buffer.from(parsed.data[0].blob, 'base64');
+          } else if (parsed?.audio || parsed?.binary || parsed?.data) {
+            // Fallback shapes
+            const b64 = parsed.audio || parsed.binary || parsed.data;
+            if (typeof b64 === 'string') {
+              audioData = Buffer.from(b64, 'base64');
+            } else {
+              throw new Error('Unexpected JSON structure for audio payload');
+            }
+          } else if (parsed?.error || parsed?.estimated_time) {
+            // Model warming or error
+            const msg = parsed?.error || `Model warming; estimated_time=${parsed?.estimated_time}`;
+            return res.status(502).json({ status: 'error', message: msg, provider: parsed });
+          } else {
+            throw new Error('Unexpected JSON response from Hugging Face');
+          }
         }
-
-        // If HF returns JSON (e.g., model loading, or base64-encoded payload)
-        try {
-          const text = Buffer.from(response.data).toString('utf8');
-          const data = JSON.parse(text);
-          console.log('[HF] JSON body:', JSON.stringify(data).slice(0, 500));
-          if (data.error || data.estimated_time) {
-            const waitMs = Math.min(15_000, Math.ceil((data.estimated_time || 5) * 1000));
-            console.log(`Model not ready (attempt ${attempt}). Waiting ${waitMs}ms...`);
-            await sleep(waitMs);
-            continue;
-          }
-          // Try known shapes for base64 audio
-          const b64 = data.audio || data.binary || data.data || null;
-          if (b64 && typeof b64 === 'string') {
-            const audioUrl = `data:audio/mp3;base64,${b64}`;
-            return res.json({ status: 'succeeded', audio_url: audioUrl });
-          }
-          return res.status(502).json({ status: 'error', message: data.error || 'Unexpected provider response', provider: data });
-        } catch {}
-
-        // Unknown non-audio response
-        const sample = Buffer.from(response.data).toString('utf8').slice(0, 200);
-        lastErr = new Error(`Unexpected non-audio response: ${sample}`);
       } catch (e) {
-        lastErr = e;
-        const status = e?.response?.status;
-        if (status === 401) {
-          const detail = (() => { try { return JSON.stringify(e?.response?.data); } catch { return 'Unauthorized'; } })();
-          return res.status(401).json({ status: 'error', error: 'Unauthorized: check HF_API_KEY', details: detail });
-        }
-        if (status === 404) {
-          const text = (() => { try { return Buffer.from(e?.response?.data || '').toString('utf8'); } catch { return ''; } })();
-          console.warn(`[HF] 404 Not Found on endpoint index ${epIndex}. Body: ${text.slice(0,200)}`);
-          // Try next endpoint if available
-          if (epIndex < endpoints.length - 1) {
-            epIndex++;
-            continue;
-          }
-        }
-        if (status === 403) {
-          const detail = (() => { try { return JSON.stringify(e?.response?.data); } catch { return 'Forbidden'; } })();
-          return res.status(403).json({ status: 'error', error: 'Forbidden: check model access/quota', details: detail });
-        }
-        // Retry on model loading (503) or rate limiting (429)
-        if (status === 503 || status === 429) {
-          const details = (() => {
-            try { return JSON.stringify(e?.response?.data); } catch { return String(e); }
-          })();
-          const backoff = Math.min(15_000, 2000 * attempt);
-          console.log(`HF ${status} (attempt ${attempt}): ${details}. Retrying in ${backoff}ms...`);
-          await sleep(backoff);
-          continue;
-        }
-        // Network/timeout errors
-        if (!status) {
-          const code = e?.code || 'UNKNOWN';
-          const msg = e?.message || String(e);
-          console.warn(`[HF] Network error (attempt ${attempt}) code=${code} message=${msg}`);
-          const backoff = Math.min(15_000, 2000 * attempt);
-          await sleep(backoff);
-          continue;
-        }
-        // For other errors, break
-        break;
+        console.error('Error parsing audio response:', e?.message || e);
+        return res.status(500).json({ error: 'Invalid audio response' });
       }
-    }
 
-    const msg = lastErr?.response?.data || lastErr?.message || 'Unknown error from HF MusicGen';
-    console.error('HF MusicGen error (final):', typeof msg === 'string' ? msg : JSON.stringify(msg));
-    return res.status(500).json({ status: 'error', error: 'Music generation failed', details: (typeof msg === 'string' ? msg : JSON.stringify(msg)) });
+      // Return raw audio with appropriate content-type
+      res.setHeader('Content-Type', 'audio/mpeg');
+      return res.send(audioData);
+    } catch (e) {
+      const status = e?.response?.status;
+      if (status === 401) {
+        return res.status(401).json({ status: 'error', error: 'Unauthorized: check HF_API_KEY' });
+      }
+      if (status === 403) {
+        return res.status(403).json({ status: 'error', error: 'Forbidden: check model access/quota' });
+      }
+      if (status === 404) {
+        return res.status(404).json({ status: 'error', error: 'Model not found at HF router endpoint' });
+      }
+      console.error('HF request failed:', e?.message || e);
+      return res.status(500).json({ status: 'error', error: 'Music generation request failed', details: e?.message || String(e) });
+    }
   } catch (error) {
     const details = error?.response?.data || error?.message || String(error);
     console.error('HF MusicGen error (outer catch):', details);
